@@ -16,3 +16,6 @@ PowerShell tool that resolves a Windows shortcut (.lnk), safely finds the real i
 ## Requirements
 
 - Windows PowerShell 5.1+ or PowerShell 7+
+
+## Protected Folders (Template)
+Copy "DeskPurge_ProtectedFolders.template.txt" to "DeskPurge_ProtectedFolders.txt" and edit as needed. The existing local file is never modified by the script.
