@@ -1,0 +1,7 @@
+﻿GameUninstall_Log.txt
+Test/
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
