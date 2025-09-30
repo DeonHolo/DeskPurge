@@ -4,8 +4,9 @@ PowerShell tool primarily used to uninstall games: it resolves a Windows shortcu
 
 ## Quick Start
 
-1) Download the repo (or the two files you need):
+1) Download the repo (or these files):
 - `DeskPurge.ps1`
+- `Install-ContextMenu.ps1` and `Uninstall-ContextMenu.ps1`
 - `DeskPurge_ProtectedFolders.txt` (or start from `DeskPurge_ProtectedFolders.template.txt`)
 
 2) Place both files in the same directory (anywhere you prefer).
