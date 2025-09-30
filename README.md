@@ -30,7 +30,6 @@ PowerShell tool primarily used to uninstall games and save disk space: it resolv
 - The installer targets your local `DeskPurge.ps1` and runs it with a hidden window using:
   `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "...\DeskPurge.ps1" "%1"`
 - If you move `DeskPurge.ps1` later, re‑run `Install-ContextMenu.ps1` so the registry points to the new path.
-- You can do this manually by right‑clicking a shortcut → Open file location → delete the containing folder and remove the shortcut. This tool automates that repetitive flow to save time.
 
 ## Safety
 
@@ -40,8 +39,9 @@ PowerShell tool primarily used to uninstall games and save disk space: it resolv
 
 ## Important Disclaimers
 
+- This tool does the same thing by right‑clicking a shortcut → Open file location → delete the containing folder and remove the shortcut. It only automates that repetitive flow to save time.
 - If you do NOT configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire libraries. Review and update it before use.
-- This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (I “sailed the seven seas”). It serves a niche purpose and is not recommended for general use. It does not uninstall via game launchers or remove registry keys, save data stored elsewhere, or other system traces; it is simply a folder/shortcut remover to reclaim disk space. Provided as‑is, with no warranty. Use at your own risk.
+- This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (🏴‍☠️Yo ho ho and a bottle of rum!). It serves a niche purpose and is not recommended for general use. It does not uninstall via game launchers or remove registry keys, save data stored elsewhere, or other system traces; it is simply a folder/shortcut remover to reclaim disk space. Provided as‑is, with no warranty. Use at your own risk.
 
 ## Requirements
 
