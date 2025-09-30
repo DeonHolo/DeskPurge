@@ -9,7 +9,7 @@ PowerShell tool primarily used to uninstall games: it resolves a Windows shortcu
 - `Install-ContextMenu.ps1` and `Uninstall-ContextMenu.ps1`
 - `DeskPurge_ProtectedFolders.txt` (or start from `DeskPurge_ProtectedFolders.template.txt`)
 
-2) Place both files in the same directory (anywhere you prefer).
+2) Place the files in the same directory (anywhere you prefer).
 
 3) Configure protected folders (strongly recommended):
 - Copy `DeskPurge_ProtectedFolders.template.txt` to `DeskPurge_ProtectedFolders.txt` if you do not already have one.
