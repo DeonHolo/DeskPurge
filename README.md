@@ -45,6 +45,3 @@ PowerShell tool primarily used to uninstall games: it resolves a Windows shortcu
 ## Requirements
 
 - Windows PowerShell 5.1+ or PowerShell 7+
-
-## Protected Folders (Template)
-Copy `DeskPurge_ProtectedFolders.template.txt` to `DeskPurge_ProtectedFolders.txt` and edit as needed. The existing local file is never modified by the script.
