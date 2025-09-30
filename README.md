@@ -1,6 +1,6 @@
 ﻿# DeskPurge
 
-PowerShell tool that resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
+PowerShell tool primarily used to uninstall games: it resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
 
 ## Quick Start
 
@@ -12,35 +12,20 @@ PowerShell tool that resolves a Windows shortcut (.lnk), safely finds the real i
 
 3) Configure protected folders (strongly recommended):
 - Copy `DeskPurge_ProtectedFolders.template.txt` to `DeskPurge_ProtectedFolders.txt` if you do not already have one.
-- Open `DeskPurge_ProtectedFolders.txt` and add any root folders that must never be deleted (one path per line). Examples: your game library roots, cloud folders, external drives you don’t want touched.
+- Open `DeskPurge_ProtectedFolders.txt` and add any root folders that must never be deleted (one path per line). For the intended use, it’s typically sufficient to add your main game library folder (for example `D:\Games`).
 
-4) Run from PowerShell (manual run):
-```powershell
-PowerShell -ExecutionPolicy Bypass -File .\DeskPurge.ps1 -LinkPathFromContextMenu "C:\Path\To\Game Shortcut.lnk"
-```
-
-5) Optional: Add to Windows “Send to” menu (simple integration):
-- Create a shortcut to `powershell.exe`.
-- Set Target to something like:
+4) Context Menu (Shift+Right‑Click on .lnk):
+- Install the context menu verb so DeskPurge appears when you hold Shift and right‑click a `.lnk`:
+  ```powershell
+  PowerShell -ExecutionPolicy Bypass -File .\Install-ContextMenu.ps1
   ```
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Path\To\DeskPurge.ps1" -LinkPathFromContextMenu "%1"
+- After install: hold Shift + Right‑Click a game shortcut (.lnk) → choose “DeskPurge - Uninstall”.
+- To remove the verb later, run:
+  ```powershell
+  PowerShell -ExecutionPolicy Bypass -File .\Uninstall-ContextMenu.ps1
   ```
-- Place that shortcut in `%APPDATA%\Microsoft\Windows\SendTo`.
-- Now right‑click any `.lnk` file → Send to → your DeskPurge shortcut.
 
-## Context Menu (Shift+Right‑Click on .lnk)
-
-Use the installers in the repo root:
-
-- `Install-ContextMenu.ps1` — registers an “Extended” context menu verb so it appears only when you hold Shift and right‑click a `.lnk`.
-- `Uninstall-ContextMenu.ps1` — removes the verb.
-
-Install:
-```powershell
-PowerShell -ExecutionPolicy Bypass -File .\Install-ContextMenu.ps1
-```
-
-Notes:
+## Notes
 - The installer targets your local `DeskPurge.ps1` and runs it with a hidden window using:
   `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "...\DeskPurge.ps1" "%1"`
 - If you move `DeskPurge.ps1` later, re‑run `Install-ContextMenu.ps1` so the registry points to the new path.
