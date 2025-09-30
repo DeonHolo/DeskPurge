@@ -1,6 +1,6 @@
 ﻿# DeskPurge
 
-PowerShell tool primarily used to uninstall games: it resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
+PowerShell tool primarily used to uninstall games and save disk space: it resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
 
 ## Quick Start
 
@@ -30,6 +30,7 @@ PowerShell tool primarily used to uninstall games: it resolves a Windows shortcu
 - The installer targets your local `DeskPurge.ps1` and runs it with a hidden window using:
   `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "...\DeskPurge.ps1" "%1"`
 - If you move `DeskPurge.ps1` later, re‑run `Install-ContextMenu.ps1` so the registry points to the new path.
+- You can do this manually by right‑clicking a shortcut → Open file location → delete the containing folder and remove the shortcut. This tool automates that repetitive flow to save time.
 
 ## Safety
 
@@ -40,7 +41,7 @@ PowerShell tool primarily used to uninstall games: it resolves a Windows shortcu
 ## Important Disclaimers
 
 - If you do NOT configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire libraries. Review and update it before use.
-- This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (I “sailed the seven seas”). It serves a niche purpose and is not recommended for general use. Provided as‑is, with no warranty. Use at your own risk.
+- This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (I “sailed the seven seas”). It serves a niche purpose and is not recommended for general use. It does not uninstall via game launchers or remove registry keys, save data stored elsewhere, or other system traces; it is simply a folder/shortcut remover to reclaim disk space. Provided as‑is, with no warranty. Use at your own risk.
 
 ## Requirements
 
