@@ -28,6 +28,23 @@ PowerShell -ExecutionPolicy Bypass -File .\DeskPurge.ps1 -LinkPathFromContextMen
 - Place that shortcut in `%APPDATA%\Microsoft\Windows\SendTo`.
 - Now right‑click any `.lnk` file → Send to → your DeskPurge shortcut.
 
+## Context Menu (Shift+Right‑Click on .lnk)
+
+Use the installers in the repo root:
+
+- `Install-ContextMenu.ps1` — registers an “Extended” context menu verb so it appears only when you hold Shift and right‑click a `.lnk`.
+- `Uninstall-ContextMenu.ps1` — removes the verb.
+
+Install:
+```powershell
+PowerShell -ExecutionPolicy Bypass -File .\Install-ContextMenu.ps1
+```
+
+Notes:
+- The installer targets your local `DeskPurge.ps1` and runs it with a hidden window using:
+  `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "...\DeskPurge.ps1" "%1"`
+- If you move `DeskPurge.ps1` later, re‑run `Install-ContextMenu.ps1` so the registry points to the new path.
+
 ## Safety
 
 - DeskPurge includes built‑in protections for system/user folders and supports a user list via `DeskPurge_ProtectedFolders.txt`.
@@ -37,7 +54,7 @@ PowerShell -ExecutionPolicy Bypass -File .\DeskPurge.ps1 -LinkPathFromContextMen
 ## Important Disclaimers
 
 - If you do NOT configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire libraries. Review and update it before use.
-- This is a personal PowerShell script published for my own use. It is provided as‑is, with no warranty. Use at your own risk.
+- This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (I “sailed the seven seas”). It serves a niche purpose and is not recommended for general use. Provided as‑is, with no warranty. Use at your own risk.
 
 ## Requirements
 
