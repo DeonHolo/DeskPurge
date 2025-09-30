@@ -2,7 +2,7 @@
 
 PowerShell tool primarily used to uninstall games and save disk space: it resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
 
-## Quick Start
+## Installation
 
 1) Download the repo (or these files):
 - `DeskPurge.ps1`
