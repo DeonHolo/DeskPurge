@@ -16,6 +16,13 @@ DeskPurge's solution:
 
 **Why protected folders?** Protected folders are essential safety boundaries. Without them, DeskPurge could accidentally walk up the folder tree and delete much more than intended, potentially your entire game library (there is a confirmation dialog of course, but nothing can be done if you confirm, as the deletion type is permanent). By setting protected folders (like your game library root), you ensure the script only deletes the intended game folder and nothing beyond your chosen stop points.
 
+## 🎯 Who It's For
+
+- Users with games installed outside of launchers or across multiple drives
+- People with deep, nested shortcut targets (bin/x64/release, etc.)
+- Anyone wanting a fast, safe way to reclaim disk space from old installs
+- Power users who like context‑menu workflows; beginner‑safe with confirmations
+
 ## 📦 Installation
 
 1) Download the repo (or these files):
