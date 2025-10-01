@@ -60,11 +60,23 @@ DeskPurge's solution:
 - ✅ **Confirmation dialog:** Shows the target folder and estimated size before deleting
 - 🚫 **Process check:** Ensures the game isn't running before deletion
 
-## ⚠️ Important Disclaimers
+## ⚠️ Important Disclaimers & Competitive Justification
 
-- **WARNING:** If you do **NOT** configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire game libraries. Review and add your library paths before use.
-- This tool does the same thing by right‑clicking a shortcut → Open file location → delete the containing folder and remove the shortcut. It only automates that repetitive flow to save time.
-- This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (🏴‍☠️Yo ho ho and a bottle of rum!). It serves a niche purpose and is not recommended for general use. It does not uninstall via game launchers or remove registry keys, save data stored elsewhere, or other system traces; it is simply a folder/shortcut remover to reclaim disk space. Provided as‑is, with no warranty. Use at your own risk.
+### ⚖️ DeskPurge vs. Advanced Uninstallers (e.g., Revo)
+
+DeskPurge is a fast, workflow‑centric tool; Revo is a deep system uninstaller. Different jobs, different tools.
+
+| Feature   | DeskPurge                              | Revo (Hunter Mode)                         | Why it matters                                   |
+| :--       | :--                                    | :--                                        | :--                                              |
+| Workflow  | One‑click context‑menu action          | Drag target / multi‑step activation        | Speed: instant, low‑friction cleanup             |
+| Focus     | Deletes install folder (filesystem)    | Registry + system trace removal            | Direct: maximizes immediate disk space reclaimed |
+| Automation| Auto‑resolves .lnk targets to game root| Manual drag or path entry                  | Efficient for bulk shortcut cleanups             |
+
+- **Core limitation:** DeskPurge deletes the install folder and the shortcut only. It does not call launchers or scrub registry/system traces—use Revo for full cleanups.
+- **WARNING:** If you do NOT configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire game libraries. Review and add your library paths before use.
+- Provided as‑is, with no warranty. Use at your own risk.
+
+> It’s the ultimate “I know what I’m doing and I just want the folder gone right now” tool.
 
 ## 📋 Requirements
 
