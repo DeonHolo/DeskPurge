@@ -39,8 +39,8 @@ PowerShell tool primarily used to uninstall games and save disk space: it resolv
 
 ## Important Disclaimers
 
+- **WARNING:** If you do **NOT** configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire libraries. Review and update it before use.
 - This tool does the same thing by right‑clicking a shortcut → Open file location → delete the containing folder and remove the shortcut. It only automates that repetitive flow to save time.
-- If you do NOT configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire libraries. Review and update it before use.
 - This is a personal PowerShell script I published for my own use to clean a cluttered desktop with many game shortcuts (🏴‍☠️Yo ho ho and a bottle of rum!). It serves a niche purpose and is not recommended for general use. It does not uninstall via game launchers or remove registry keys, save data stored elsewhere, or other system traces; it is simply a folder/shortcut remover to reclaim disk space. Provided as‑is, with no warranty. Use at your own risk.
 
 ## Requirements
