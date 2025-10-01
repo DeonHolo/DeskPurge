@@ -115,8 +115,8 @@ try {
         $targetExeName = Split-Path -Path $targetPath -Leaf
     }
     finally {
-        if ($shortcut -ne $null) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) | Out-Null }
-        if ($shell -ne $null) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null }
+        if ($null -ne $shortcut) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) | Out-Null }
+        if ($null -ne $shell) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null }
     }
 
     if (-not (Test-Path -LiteralPath $targetPath)) {
