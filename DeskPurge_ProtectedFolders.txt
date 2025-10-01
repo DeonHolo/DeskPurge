@@ -1,5 +1,24 @@
-D:\Games
-D:\~Games~
-C:\Games
-C:\Windows
-C:\Program Files
+# DeskPurge Protected Folders Configuration
+# 
+# Add your game library root folders here (one path per line).
+# These act as "stop boundaries" when the script walks up parent folders.
+#
+# The script ALREADY protects (no need to add these):
+#   - Root drives (C:\, D:\, E:\, etc.)
+#   - C:\Windows, C:\Program Files, C:\Program Files (x86)
+#   - Your User Profile, Desktop, and Public Desktop
+#
+# You only need to list YOUR GAME LIBRARY FOLDERS below:
+
+# Common examples (uncomment/modify as needed):
+# E:\Games
+# D:\SteamLibrary
+# E:\SteamLibrary
+# C:\Program Files (x86)\Steam\steamapps\common
+# D:\EpicGames
+# D:\GOG Games
+# D:\Origin Games
+# C:\XboxGames
+# D:\Games
+# D:\~Games~
+# C:\Games
