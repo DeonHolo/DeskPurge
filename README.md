@@ -2,6 +2,20 @@
 
 PowerShell tool primarily used to uninstall games and save disk space: it resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
 
+## How It Works
+
+When you click on a game shortcut, it often points to an `.exe` buried deep inside nested folders (e.g., `D:\Games\MyGame\bin\x64\release\game.exe`). The problem: we want to delete the entire `MyGame` folder, not just the `.exe`.
+
+DeskPurge's solution:
+1. Resolves the shortcut to find the real `.exe` location
+2. Walks **up** the parent folders one level at a time
+3. Stops when it hits a **protected folder** (your "stop boundary")
+4. Deletes the folder right before that boundary
+
+**Example:** If your shortcut points to `D:\Games\CoolGame\bin\game.exe` and you've set `D:\Games` as a protected folder, DeskPurge will walk up from `game.exe` → `bin` → `CoolGame` → **STOP** (because the next parent is `D:\Games`, which is protected). It then deletes `CoolGame` and the shortcut.
+
+**Why protected folders?** Without them, the script could walk all the way up to `C:\` or `D:\` and delete your entire drive. Protected folders act as safety boundaries to prevent catastrophic deletions.
+
 ## Installation
 
 1) Download the repo (or these files):
