@@ -28,7 +28,7 @@ DeskPurge's solution:
 3) ⚠️ Configure protected folders (strongly recommended):
 - Open `DeskPurge_ProtectedFolders.txt` and update it with your actual game library root folders
 - Example: If your games are in `E:\Media\Games`, add that path to prevent deleting the entire library
-- The file includes common examples - just uncomment and modify as needed
+- The file includes common example library locations - remove or modify as needed (no real harm in keeping them there)
 
 4) Context Menu (Shift+Right‑Click on .lnk):
 - Install the context menu verb so DeskPurge appears when you hold Shift and right‑click a `.lnk`:

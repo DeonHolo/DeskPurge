@@ -8,17 +8,40 @@
 #   - C:\Windows, C:\Program Files, C:\Program Files (x86)
 #   - Your User Profile, Desktop, and Public Desktop
 #
-# You only need to list YOUR GAME LIBRARY FOLDERS below:
+# ADD YOUR GAME LIBRARY FOLDERS BELOW (remove the # to activate):
 
-# Common examples (uncomment/modify as needed):
-# E:\Games
-# D:\SteamLibrary
-# E:\SteamLibrary
-# C:\Program Files (x86)\Steam\steamapps\common
-# D:\EpicGames
-# D:\GOG Games
-# D:\Origin Games
-# C:\XboxGames
-# D:\Games
-# D:\~Games~
-# C:\Games
+# Common game library locations - ADD YOUR ACTUAL PATHS:
+C:\Games
+D:\Games
+E:\Games
+
+# Steam libraries:
+C:\Program Files (x86)\Steam\steamapps\common
+D:\SteamLibrary
+E:\SteamLibrary
+
+# Epic Games:
+C:\Program Files\Epic Games
+D:\EpicGames
+
+# GOG Galaxy:
+C:\GOG Games
+D:\GOG Games
+
+# Origin/EA:
+C:\Program Files (x86)\Origin Games
+D:\Origin Games
+
+# Ubisoft/Uplay:
+C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games
+
+# Xbox Game Pass:
+C:\Program Files\WindowsApps
+C:\XboxGames
+
+# Cloud storage (if you store games there):
+C:\OneDrive
+C:\Dropbox
+C:\Google Drive
+
+
