@@ -14,7 +14,7 @@ DeskPurge's solution:
 
 **Example:** If your shortcut points to `D:\Games\CoolGame\bin\game.exe` and you've set `D:\Games` as a protected folder, DeskPurge will walk up from `game.exe` → `bin` → `CoolGame` → **STOP** (because the next parent is `D:\Games`, which is protected). It then deletes `CoolGame` and the shortcut.
 
-**Why protected folders?** Protected folders are essential safety boundaries. Without them, DeskPurge could accidentally walk up the folder tree and delete much more than intended—potentially your entire game library. By setting protected folders (like your game library root), you ensure the script only deletes the intended game folder and nothing beyond your chosen stop points.
+**Why protected folders?** Protected folders are essential safety boundaries. Without them, DeskPurge could accidentally walk up the folder tree and delete much more than intended, potentially your entire game library (there is a confirmation dialog of course, but nothing can be done if you confirm, as the deletion type is permanent). By setting protected folders (like your game library root), you ensure the script only deletes the intended game folder and nothing beyond your chosen stop points.
 
 ## 📦 Installation
 
