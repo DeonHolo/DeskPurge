@@ -25,19 +25,16 @@ DeskPurge's solution:
 
 ## Installation
 
-1) Download the repo (or these files):
-- `DeskPurge.ps1`
-- `Install-ContextMenu.ps1` and `Uninstall-ContextMenu.ps1`
-- `DeskPurge_ProtectedFolders.txt`
-
-2) Place the files in the same directory (anywhere you prefer).
-
-3) Configure protected folders (REQUIRED):
+1) Clone the repository
+```bash
+git clone https://github.com/DeonHolo/DeskPurge.git
+```
+2) Configure protected folders (REQUIRED):
 - Open `DeskPurge_ProtectedFolders.txt` and update it with your actual game library root folders
 - Example: If your games are in `E:\Media\Games`, add that path to prevent deleting the entire library
 - The file includes common example library locations - remove or modify as needed (no real harm in keeping them there)
 
-4) Context Menu (Shift+Right‑Click on .lnk):
+3) Context Menu (Shift+Right‑Click on .lnk):
 - Install the context menu verb so DeskPurge appears when you hold Shift and right‑click a `.lnk`:
   ```powershell
   PowerShell -ExecutionPolicy Bypass -File .\Install-ContextMenu.ps1
@@ -76,8 +73,10 @@ DeskPurge is a fast, workflow‑centric tool; Revo is a deep system uninstaller.
 - **WARNING:** If you do NOT configure `DeskPurge_ProtectedFolders.txt` correctly, you can delete entire game libraries. Review and add your library paths before use.
 - Provided as‑is, with no warranty. Use at your own risk.
 
-> It’s the ultimate “I know what I’m doing and I just want the folder gone right now” tool.
-
 ## Requirements
 
 - Windows PowerShell 5.1+ or PowerShell 7+
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
