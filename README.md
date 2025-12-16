@@ -32,7 +32,7 @@ DeskPurge's solution:
 
 2) Place the files in the same directory (anywhere you prefer).
 
-3) Configure protected folders (strongly recommended):
+3) Configure protected folders (REQUIRED):
 - Open `DeskPurge_ProtectedFolders.txt` and update it with your actual game library root folders
 - Example: If your games are in `E:\Media\Games`, add that path to prevent deleting the entire library
 - The file includes common example library locations - remove or modify as needed (no real harm in keeping them there)
