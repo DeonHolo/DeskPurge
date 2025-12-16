@@ -2,7 +2,7 @@
 
 PowerShell tool primarily used to uninstall games and save disk space: it resolves a Windows shortcut (.lnk), safely finds the real install folder, confirms with a size preview, and deletes the folder and the shortcut. Logs actions to `DeskPurge_Log.txt`.
 
-## ⚙️ How It Works
+## How It Works
 
 When you click on a game shortcut, it often points to an `.exe` buried deep inside nested folders (e.g., `D:\Games\MyGame\bin\x64\release\game.exe`). The problem: we want to delete the entire `MyGame` folder, not just the `.exe`.
 
@@ -16,14 +16,14 @@ DeskPurge's solution:
 
 **Why protected folders?** Protected folders are essential safety boundaries. Without them, DeskPurge could accidentally walk up the folder tree and delete much more than intended, potentially your entire game library (there is a confirmation dialog of course, but nothing can be done if you confirm, as the deletion type is permanent). By setting protected folders (like your game library root), you ensure the script only deletes the intended game folder and nothing beyond your chosen stop points.
 
-## 🎯 Who It's For
+## Who It's For
 
 - Users with games installed outside of launchers or across multiple drives
 - People with deep, nested shortcut targets (bin/x64/release, etc.)
 - Anyone wanting a fast, safe way to reclaim disk space from old installs
 - Power users who like context‑menu workflows; beginner‑safe with confirmations
 
-## 📦 Installation
+## Installation
 
 1) Download the repo (or these files):
 - `DeskPurge.ps1`
@@ -32,7 +32,7 @@ DeskPurge's solution:
 
 2) Place the files in the same directory (anywhere you prefer).
 
-3) ⚠️ Configure protected folders (strongly recommended):
+3) Configure protected folders (strongly recommended):
 - Open `DeskPurge_ProtectedFolders.txt` and update it with your actual game library root folders
 - Example: If your games are in `E:\Media\Games`, add that path to prevent deleting the entire library
 - The file includes common example library locations - remove or modify as needed (no real harm in keeping them there)
@@ -53,16 +53,16 @@ DeskPurge's solution:
   `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "...\DeskPurge.ps1" "%1"`
 - If you move `DeskPurge.ps1` later, re‑run `Install-ContextMenu.ps1` so the registry points to the new path.
 
-## 🛡️ Safety
+## Safety
 
 - 🔒 **Built-in protections:** Root drives (`C:\`, `D:\`, etc.), `C:\Windows`, `C:\Program Files`, User Profile, and Desktop are automatically protected
 - 📁 **User-defined boundaries:** Add your game library folders to `DeskPurge_ProtectedFolders.txt` to prevent deleting entire libraries
 - ✅ **Confirmation dialog:** Shows the target folder and estimated size before deleting
 - 🚫 **Process check:** Ensures the game isn't running before deletion
 
-## ⚠️ Important Disclaimers & Competitive Justification
+## Important Disclaimers & Competitive Justification
 
-### ⚖️ DeskPurge vs. Advanced Uninstallers (e.g., Revo)
+### DeskPurge vs. Advanced Uninstallers (e.g., Revo)
 
 DeskPurge is a fast, workflow‑centric tool; Revo is a deep system uninstaller. Different jobs, different tools.
 
@@ -78,6 +78,6 @@ DeskPurge is a fast, workflow‑centric tool; Revo is a deep system uninstaller.
 
 > It’s the ultimate “I know what I’m doing and I just want the folder gone right now” tool.
 
-## 📋 Requirements
+## Requirements
 
 - Windows PowerShell 5.1+ or PowerShell 7+
