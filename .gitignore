@@ -1,4 +1,7 @@
-﻿Test/
+Test/
+DeskPurge_Log.txt
+DeskPurge_CriticalError.txt
+DeskPurge.Hidden.vbs
 *.log
 *.tmp
 *.bak

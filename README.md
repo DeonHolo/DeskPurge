@@ -32,10 +32,11 @@ DeskPurge's solution:
 
 2) Place the files in the same directory (anywhere you prefer).
 
-3) ⚠️ Configure protected folders (strongly recommended):
+3) ⚠️ Configure protected folders (required):
 - Open `DeskPurge_ProtectedFolders.txt` and update it with your actual game library root folders
 - Example: If your games are in `E:\Media\Games`, add that path to prevent deleting the entire library
-- The file includes common example library locations - remove or modify as needed (no real harm in keeping them there)
+- For Steam libraries, use the folder that directly contains each game folder, usually `...\steamapps\common`
+- The file includes common example library locations - remove or modify as needed. DeskPurge will stop before deleting anything if this file is missing or has no active entries.
 
 4) Context Menu (Shift+Right‑Click on .lnk):
 - Install the context menu verb so DeskPurge appears when you hold Shift and right‑click a `.lnk`:
@@ -49,14 +50,15 @@ DeskPurge's solution:
   ```
 
 ## Notes
-- The installer targets your local `DeskPurge.ps1` and runs it with a hidden window using:
-  `powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "...\DeskPurge.ps1" "%1"`
+- By default, the installer expects `Install-ContextMenu.ps1` and `DeskPurge.ps1` in the same directory. If your script lives elsewhere, pass `-ScriptPath "C:\Path\To\DeskPurge.ps1"`.
+- The installer creates `DeskPurge.Hidden.vbs` next to `DeskPurge.ps1` and points the context menu at `wscript.exe`.
+  This avoids the split-second PowerShell console flash that can happen when Explorer starts `powershell.exe` directly.
 - If you move `DeskPurge.ps1` later, re‑run `Install-ContextMenu.ps1` so the registry points to the new path.
 
 ## 🛡️ Safety
 
 - 🔒 **Built-in protections:** Root drives (`C:\`, `D:\`, etc.), `C:\Windows`, `C:\Program Files`, User Profile, and Desktop are automatically protected
-- 📁 **User-defined boundaries:** Add your game library folders to `DeskPurge_ProtectedFolders.txt` to prevent deleting entire libraries
+- 📁 **User-defined boundaries:** `DeskPurge_ProtectedFolders.txt` is required; add your game library folders to prevent deleting entire libraries
 - ✅ **Confirmation dialog:** Shows the target folder and estimated size before deleting
 - 🚫 **Process check:** Ensures the game isn't running before deletion
 

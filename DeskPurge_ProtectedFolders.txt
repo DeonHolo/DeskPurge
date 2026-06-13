@@ -12,13 +12,15 @@
 
 # Common game library locations - ADD YOUR ACTUAL PATHS:
 C:\Games
+D:\~Games~
 D:\Games
 E:\Games
+D:\Games2
 
 # Steam libraries:
 C:\Program Files (x86)\Steam\steamapps\common
-D:\SteamLibrary
-E:\SteamLibrary
+D:\SteamLibrary\steamapps\common
+E:\SteamLibrary\steamapps\common
 
 # Epic Games:
 C:\Program Files\Epic Games

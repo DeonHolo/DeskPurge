@@ -13,6 +13,12 @@ jobs:
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -MinimumVersion 1.21.0
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -Scope CurrentUser -Force -MinimumVersion 5.5.0
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning
+      - name: Run Pester
+        shell: pwsh
+        run: Invoke-Pester -Path .\tests -CI
