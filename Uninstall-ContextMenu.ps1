@@ -1,6 +1,7 @@
 param(
     [string]$ScriptPath = (Join-Path $PSScriptRoot "DeskPurge.ps1"),
-    [string]$VerbKeyName = "DeskPurge"
+    [string]$VerbKeyName = "DeskPurge",
+    [string]$LegacyBatchVerbKeyName = "DeskPurgeBatch"
 )
 
 function Remove-DeskPurgeRegistryKeyIfPresent {
@@ -20,7 +21,10 @@ function Remove-DeskPurgeRegistryKeyIfPresent {
         }
 
         $command = (Get-ItemProperty -LiteralPath $commandKey)."(default)"
-        if ($command -notlike "*DeskPurge.ps1*" -and $command -notlike "*$ScriptPath*") {
+        $matchesDeskPurge = $command -like "*DeskPurge.ps1*" `
+            -or $command -like "*DeskPurge.Batch.ps1*" `
+            -or $command -like "*$ScriptPath*"
+        if (-not $matchesDeskPurge) {
             return
         }
     }
@@ -34,13 +38,23 @@ function Remove-DeskPurgeRegistryKeyIfPresent {
     }
 }
 
-$verbKey = "HKCU:\Software\Classes\lnkfile\shell\$VerbKeyName"
-Remove-DeskPurgeRegistryKeyIfPresent -Path $verbKey
+function Remove-DeskPurgeLauncherIfPresent {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        Remove-Item -LiteralPath $Path -Force
+        Write-Host "Removed hidden launcher: $Path"
+    }
+}
+
+Remove-DeskPurgeRegistryKeyIfPresent -Path "HKCU:\Software\Classes\lnkfile\shell\$VerbKeyName"
+Remove-DeskPurgeRegistryKeyIfPresent -Path "HKCU:\Software\Classes\lnkfile\shell\$LegacyBatchVerbKeyName"
 Remove-DeskPurgeRegistryKeyIfPresent -Path "HKCU:\Software\Classes\lnkfile\shell\Uninstall" -OnlyIfDeskPurgeCommand
 Remove-DeskPurgeRegistryKeyIfPresent -Path "HKLM:\Software\Classes\lnkfile\shell\Uninstall" -OnlyIfDeskPurgeCommand
 
-$launcherPath = Join-Path -Path (Split-Path -Path $ScriptPath -Parent) -ChildPath "DeskPurge.Hidden.vbs"
-if (Test-Path -LiteralPath $launcherPath -PathType Leaf) {
-    Remove-Item -LiteralPath $launcherPath -Force
-    Write-Host "Removed hidden launcher: $launcherPath"
-}
+$scriptDirectory = Split-Path -Path $ScriptPath -Parent
+$launcherPath = Join-Path -Path $scriptDirectory -ChildPath "DeskPurge.Hidden.vbs"
+$legacyBatchLauncherPath = Join-Path -Path $scriptDirectory -ChildPath "DeskPurge.Batch.Hidden.vbs"
+
+Remove-DeskPurgeLauncherIfPresent -Path $launcherPath
+Remove-DeskPurgeLauncherIfPresent -Path $legacyBatchLauncherPath

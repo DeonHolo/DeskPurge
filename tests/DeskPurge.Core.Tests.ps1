@@ -57,6 +57,115 @@ Describe 'Get-ProtectedGameFolders' {
     }
 }
 
+Describe 'Get-DeskPurgeProtectedFolderCandidatesFromTargetPath' {
+    It 'suggests a known game-library root from a selected shortcut target' {
+        $candidates = @(Get-DeskPurgeProtectedFolderCandidatesFromTargetPath -TargetPath 'D:\Games\CoolGame\bin\game.exe')
+        $paths = @($candidates | ForEach-Object { $_.Path })
+
+        $paths | Should -Contain 'D:\Games'
+    }
+
+    It 'suggests steamapps common for Steam shortcut targets' {
+        $candidates = @(Get-DeskPurgeProtectedFolderCandidatesFromTargetPath -TargetPath 'D:\SteamLibrary\steamapps\common\ExampleGame\game.exe')
+        $paths = @($candidates | ForEach-Object { $_.Path })
+
+        $paths | Should -Contain 'D:\SteamLibrary\steamapps\common'
+    }
+
+    It 'can suggest non-system top-level install folders' {
+        $candidates = @(Get-DeskPurgeProtectedFolderCandidatesFromTargetPath -TargetPath 'D:\Program Files\ConvertTheSpireReborn\game.exe')
+        $paths = @($candidates | ForEach-Object { $_.Path })
+
+        $paths | Should -Contain 'D:\Program Files'
+    }
+
+    It 'does not suggest C Program Files as a first-run boundary' {
+        $candidates = @(Get-DeskPurgeProtectedFolderCandidatesFromTargetPath -TargetPath 'C:\Program Files\ExampleGame\game.exe')
+        $paths = @($candidates | ForEach-Object { $_.Path })
+
+        $paths | Should -Not -Contain 'C:\Program Files'
+    }
+}
+
+Describe 'Get-DeskPurgeUniqueShortcutPaths' {
+    It 'normalizes and deduplicates shortcut paths without requiring the files to exist' {
+        $paths = @(
+            'C:\Users\Example\Desktop\Game.lnk'
+            'C:\Users\Example\Desktop\Game.lnk\'
+            '  C:\Users\Example\Desktop\Other.lnk  '
+            ''
+            $null
+        )
+
+        $uniquePaths = @(Get-DeskPurgeUniqueShortcutPaths -Paths $paths)
+
+        $uniquePaths.Count | Should -Be 2
+        $uniquePaths | Should -Contain 'C:\Users\Example\Desktop\Game.lnk'
+        $uniquePaths | Should -Contain 'C:\Users\Example\Desktop\Other.lnk'
+    }
+}
+
+Describe 'Test-DeskPurgeShortcutNeedsElevation' {
+    It 'classifies public desktop shortcuts as admin-needed when the process is not elevated' {
+        Test-DeskPurgeShortcutNeedsElevation `
+            -ShortcutPath 'C:\Users\Public\Desktop\Game.lnk' `
+            -IsElevated $false `
+            -AdminShortcutRoots @('C:\Users\Public\Desktop') |
+            Should -BeTrue
+    }
+
+    It 'does not require elevation for public desktop shortcuts when already elevated' {
+        Test-DeskPurgeShortcutNeedsElevation `
+            -ShortcutPath 'C:\Users\Public\Desktop\Game.lnk' `
+            -IsElevated $true `
+            -AdminShortcutRoots @('C:\Users\Public\Desktop') |
+            Should -BeFalse
+    }
+}
+
+Describe 'New-DeskPurgeShortcutPlan' {
+    It 'rejects non-shortcut paths at row level' {
+        $plan = New-DeskPurgeShortcutPlan `
+            -ShortcutPath 'C:\Users\Example\Desktop\not-a-shortcut.txt' `
+            -TargetPath 'C:\Games\Game\game.exe' `
+            -SystemProtectedPaths @() `
+            -UserProtectedFolders @() `
+            -IsElevated $true
+
+        $plan.Status | Should -Be 'Error'
+        $plan.Message | Should -Be 'Not a shortcut (.lnk) file.'
+    }
+
+    It 'marks missing targets without selecting a deletion folder' {
+        $plan = New-DeskPurgeShortcutPlan `
+            -ShortcutPath 'C:\Users\Example\Desktop\Missing.lnk' `
+            -TargetPath (Join-Path -Path $TestDrive -ChildPath 'missing.exe') `
+            -SystemProtectedPaths @() `
+            -UserProtectedFolders @() `
+            -IsElevated $true
+
+        $plan.Status | Should -Be 'Target missing'
+        $plan.FolderToDelete | Should -BeNullOrEmpty
+    }
+
+    It 'blocks rows when final safety checks identify a protected folder target' {
+        $libraryPath = Join-Path -Path $TestDrive -ChildPath 'Library'
+        New-Item -Path $libraryPath -ItemType Directory | Out-Null
+        $targetPath = Join-Path -Path $libraryPath -ChildPath 'game.exe'
+        Set-Content -LiteralPath $targetPath -Value 'test'
+
+        $plan = New-DeskPurgeShortcutPlan `
+            -ShortcutPath 'C:\Users\Example\Desktop\Game.lnk' `
+            -TargetPath $targetPath `
+            -SystemProtectedPaths @() `
+            -UserProtectedFolders @($TestDrive, $libraryPath) `
+            -IsElevated $true
+
+        $plan.Status | Should -Be 'Blocked'
+        $plan.Message | Should -Match 'protected game-library folder'
+    }
+}
+
 Describe 'Resolve-DeskPurgeDeletionTarget' {
     It 'returns the game folder for a nested target under a configured game library' {
         $target = Resolve-DeskPurgeDeletionTarget `

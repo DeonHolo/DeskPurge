@@ -1,18 +1,23 @@
 # DeskPurge.ps1
-param([string]$LinkPathFromContextMenu)
+param(
+    [switch]$NoQueue,
 
-# --- Configuration: Define where to find the protected folders list ---
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$ShortcutPaths
+)
+
+$ErrorActionPreference = 'Stop'
+
 $ConfigFileName = "DeskPurge_ProtectedFolders.txt"
 $ScriptPath = $PSScriptRoot
 $ProtectedFoldersConfigFile = Join-Path -Path $ScriptPath -ChildPath $ConfigFileName
 . (Join-Path -Path $PSScriptRoot -ChildPath "DeskPurge.Core.ps1")
 
-# --- GUI Helper Functions ---
-$script:DeskPurgeGuiInitialized = $false
+$script:DeskPurgeBatchGuiInitialized = $false
 
-function Initialize-DeskPurgeGui {
+function Initialize-DeskPurgeBatchGui {
     try {
-        if (-not $script:DeskPurgeGuiInitialized) {
+        if (-not $script:DeskPurgeBatchGuiInitialized) {
             Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
             Add-Type -AssemblyName System.Drawing -ErrorAction Stop
             if (-not ('DeskPurge.NativeMethods' -as [type])) {
@@ -32,7 +37,7 @@ namespace DeskPurge {
 '@ -ErrorAction Stop
             }
             [System.Windows.Forms.Application]::EnableVisualStyles()
-            $script:DeskPurgeGuiInitialized = $true
+            $script:DeskPurgeBatchGuiInitialized = $true
         }
     }
     catch {
@@ -47,58 +52,26 @@ namespace DeskPurge {
     }
 }
 
-function Get-DeskPurgeDialogTheme {
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('Info', 'Warning', 'Error', 'Question', 'Success')]
-        [string]$Type
-    )
-
-    switch ($Type) {
-        'Error' {
-            return @{
-                Accent = [System.Drawing.Color]::FromArgb(248, 113, 113)
-                AccentStrong = [System.Drawing.Color]::FromArgb(220, 38, 38)
-                BadgeBack = [System.Drawing.Color]::FromArgb(69, 10, 10)
-                BadgeText = 'ERROR'
-            }
-        }
-        'Warning' {
-            return @{
-                Accent = [System.Drawing.Color]::FromArgb(251, 191, 36)
-                AccentStrong = [System.Drawing.Color]::FromArgb(217, 119, 6)
-                BadgeBack = [System.Drawing.Color]::FromArgb(69, 26, 3)
-                BadgeText = 'WARNING'
-            }
-        }
-        'Question' {
-            return @{
-                Accent = [System.Drawing.Color]::FromArgb(203, 213, 225)
-                AccentStrong = [System.Drawing.Color]::FromArgb(148, 163, 184)
-                BadgeBack = [System.Drawing.Color]::FromArgb(31, 31, 31)
-                BadgeText = 'REVIEW'
-            }
-        }
-        'Success' {
-            return @{
-                Accent = [System.Drawing.Color]::FromArgb(74, 222, 128)
-                AccentStrong = [System.Drawing.Color]::FromArgb(22, 163, 74)
-                BadgeBack = [System.Drawing.Color]::FromArgb(5, 46, 22)
-                BadgeText = 'DONE'
-            }
-        }
-        default {
-            return @{
-                Accent = [System.Drawing.Color]::FromArgb(148, 163, 184)
-                AccentStrong = [System.Drawing.Color]::FromArgb(71, 85, 105)
-                BadgeBack = [System.Drawing.Color]::FromArgb(30, 41, 59)
-                BadgeText = 'INFO'
-            }
-        }
+function Get-DeskPurgeBatchPalette {
+    return @{
+        Surface = [System.Drawing.Color]::FromArgb(18, 18, 17)
+        Panel = [System.Drawing.Color]::FromArgb(24, 24, 23)
+        Card = [System.Drawing.Color]::FromArgb(31, 31, 30)
+        Border = [System.Drawing.Color]::FromArgb(67, 63, 57)
+        Divider = [System.Drawing.Color]::FromArgb(48, 45, 41)
+        Text = [System.Drawing.Color]::FromArgb(250, 250, 249)
+        BodyText = [System.Drawing.Color]::FromArgb(214, 211, 205)
+        MutedText = [System.Drawing.Color]::FromArgb(168, 162, 158)
+        Danger = [System.Drawing.Color]::FromArgb(220, 38, 38)
+        DangerHover = [System.Drawing.Color]::FromArgb(239, 68, 68)
+        DangerDown = [System.Drawing.Color]::FromArgb(153, 27, 27)
+        Warning = [System.Drawing.Color]::FromArgb(251, 191, 36)
+        Success = [System.Drawing.Color]::FromArgb(74, 222, 128)
+        Info = [System.Drawing.Color]::FromArgb(148, 163, 184)
     }
 }
 
-function Add-DeskPurgeDragRegion {
+function Add-DeskPurgeBatchDragRegion {
     param(
         [Parameter(Mandatory = $true)]
         [System.Windows.Forms.Form]$Form,
@@ -116,7 +89,7 @@ function Add-DeskPurgeDragRegion {
     })
 }
 
-function Set-DeskPurgeButtonStyle {
+function Set-DeskPurgeBatchButtonStyle {
     param(
         [Parameter(Mandatory = $true)]
         [System.Windows.Forms.Button]$Button,
@@ -124,6 +97,7 @@ function Set-DeskPurgeButtonStyle {
         [string]$Variant = 'Primary'
     )
 
+    $palette = Get-DeskPurgeBatchPalette
     $Button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $Button.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
     $Button.Height = 40
@@ -133,11 +107,11 @@ function Set-DeskPurgeButtonStyle {
 
     switch ($Variant) {
         'Danger' {
-            $Button.BackColor = [System.Drawing.Color]::FromArgb(220, 38, 38)
+            $Button.BackColor = $palette.Danger
             $Button.ForeColor = [System.Drawing.Color]::White
             $Button.FlatAppearance.BorderSize = 0
-            $Button.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(239, 68, 68)
-            $Button.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
+            $Button.FlatAppearance.MouseOverBackColor = $palette.DangerHover
+            $Button.FlatAppearance.MouseDownBackColor = $palette.DangerDown
         }
         'Secondary' {
             $Button.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 34)
@@ -148,7 +122,7 @@ function Set-DeskPurgeButtonStyle {
             $Button.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(60, 56, 50)
         }
         'Quiet' {
-            $Button.BackColor = [System.Drawing.Color]::FromArgb(24, 24, 23)
+            $Button.BackColor = $palette.Panel
             $Button.ForeColor = [System.Drawing.Color]::FromArgb(194, 187, 176)
             $Button.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(58, 55, 50)
             $Button.FlatAppearance.BorderSize = 1
@@ -165,7 +139,670 @@ function Set-DeskPurgeButtonStyle {
     }
 }
 
-function Open-DeskPurgeFolder {
+function New-DeskPurgeBatchBaseForm {
+    param(
+        [Parameter(Mandatory = $true)][string]$Title,
+        [int]$Width = 1120,
+        [int]$Height = 720
+    )
+
+    Initialize-DeskPurgeBatchGui
+
+    $palette = Get-DeskPurgeBatchPalette
+    $form = [System.Windows.Forms.Form]::new()
+    $form.Text = $Title
+    $form.ClientSize = [System.Drawing.Size]::new($Width, $Height)
+    $form.MinimumSize = [System.Drawing.Size]::new($Width, $Height)
+    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+    $form.ShowInTaskbar = $true
+    $form.TopMost = $true
+    $form.BackColor = $palette.Border
+    $form.Font = [System.Drawing.Font]::new('Segoe UI', 9)
+    $form.KeyPreview = $true
+
+    $cornerRadius = 18
+    $cornerPath = [System.Drawing.Drawing2D.GraphicsPath]::new()
+    $cornerPath.AddArc(0, 0, $cornerRadius, $cornerRadius, 180, 90)
+    $cornerPath.AddArc($Width - $cornerRadius - 1, 0, $cornerRadius, $cornerRadius, 270, 90)
+    $cornerPath.AddArc($Width - $cornerRadius - 1, $Height - $cornerRadius - 1, $cornerRadius, $cornerRadius, 0, 90)
+    $cornerPath.AddArc(0, $Height - $cornerRadius - 1, $cornerRadius, $cornerRadius, 90, 90)
+    $cornerPath.CloseFigure()
+    $form.Region = [System.Drawing.Region]::new($cornerPath)
+
+    $rootPanel = [System.Windows.Forms.Panel]::new()
+    $rootPanel.Location = [System.Drawing.Point]::new(1, 1)
+    $rootPanel.Size = [System.Drawing.Size]::new($Width - 2, $Height - 2)
+    $rootPanel.BackColor = $palette.Surface
+    $rootPanel.Tag = $palette
+    $form.Controls.Add($rootPanel)
+
+    $titleBar = [System.Windows.Forms.Panel]::new()
+    $titleBar.Location = [System.Drawing.Point]::new(0, 0)
+    $titleBar.Size = [System.Drawing.Size]::new($Width - 2, 44)
+    $titleBar.BackColor = $palette.Panel
+    $rootPanel.Controls.Add($titleBar)
+    Add-DeskPurgeBatchDragRegion -Form $form -Control $titleBar
+
+    $titleLabel = [System.Windows.Forms.Label]::new()
+    $titleLabel.Location = [System.Drawing.Point]::new(20, 0)
+    $titleLabel.Size = [System.Drawing.Size]::new(640, 44)
+    $titleLabel.Text = 'DeskPurge'
+    $titleLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    $titleLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+    $titleLabel.ForeColor = $palette.MutedText
+    $titleBar.Controls.Add($titleLabel)
+    Add-DeskPurgeBatchDragRegion -Form $form -Control $titleLabel
+
+    $closeButton = [System.Windows.Forms.Button]::new()
+    $closeButton.Location = [System.Drawing.Point]::new($Width - 46, 0)
+    $closeButton.Size = [System.Drawing.Size]::new(44, 44)
+    $closeButton.Text = 'X'
+    $closeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $closeButton.FlatAppearance.BorderSize = 0
+    $closeButton.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(47, 45, 40)
+    $closeButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(67, 63, 57)
+    $closeButton.BackColor = $palette.Panel
+    $closeButton.ForeColor = $palette.MutedText
+    $closeButton.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+    $closeButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $titleBar.Controls.Add($closeButton)
+    $closeButton.Add_Click({
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+        $form.Close()
+    })
+
+    $form.Add_KeyDown({
+        param($sender, $eventArgs)
+
+        if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Escape) {
+            $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+            $form.Close()
+        }
+    })
+
+    return [pscustomobject]@{
+        Form = $form
+        Root = $rootPanel
+        Palette = $palette
+    }
+}
+
+function Show-DeskPurgeBatchMessage {
+    param(
+        [Parameter(Mandatory = $true)][string]$Title,
+        [Parameter(Mandatory = $true)][string]$Heading,
+        [Parameter(Mandatory = $true)][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')]
+        [string]$Type = 'Info'
+    )
+
+    $base = New-DeskPurgeBatchBaseForm -Title $Title -Width 760 -Height 430
+    $form = $base.Form
+    $rootPanel = $base.Root
+    $palette = $base.Palette
+    $accent = switch ($Type) {
+        'Error' { $palette.Danger }
+        'Warning' { $palette.Warning }
+        default { $palette.Info }
+    }
+    $badgeBack = switch ($Type) {
+        'Error' { [System.Drawing.Color]::FromArgb(69, 10, 10) }
+        'Warning' { [System.Drawing.Color]::FromArgb(69, 26, 3) }
+        default { [System.Drawing.Color]::FromArgb(30, 41, 59) }
+    }
+
+    $badgeLabel = [System.Windows.Forms.Label]::new()
+    $badgeLabel.Location = [System.Drawing.Point]::new(32, 70)
+    $badgeLabel.Size = [System.Drawing.Size]::new(96, 26)
+    $badgeLabel.Text = $Type.ToUpperInvariant()
+    $badgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $badgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+    $badgeLabel.BackColor = $badgeBack
+    $badgeLabel.ForeColor = $accent
+    $rootPanel.Controls.Add($badgeLabel)
+
+    $headingLabel = [System.Windows.Forms.Label]::new()
+    $headingLabel.Location = [System.Drawing.Point]::new(32, 108)
+    $headingLabel.Size = [System.Drawing.Size]::new(696, 34)
+    $headingLabel.Text = $Heading
+    $headingLabel.Font = [System.Drawing.Font]::new('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
+    $headingLabel.ForeColor = $palette.Text
+    $rootPanel.Controls.Add($headingLabel)
+
+    $messageLabel = [System.Windows.Forms.Label]::new()
+    $messageLabel.Location = [System.Drawing.Point]::new(32, 152)
+    $messageLabel.Size = [System.Drawing.Size]::new(696, 170)
+    $messageLabel.Text = $Message
+    $messageLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9)
+    $messageLabel.ForeColor = $palette.BodyText
+    $messageLabel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($messageLabel)
+
+    $okButton = [System.Windows.Forms.Button]::new()
+    $okButton.Text = 'OK'
+    Set-DeskPurgeBatchButtonStyle -Button $okButton -Variant 'Primary'
+    $okButton.Location = [System.Drawing.Point]::new(584, 366)
+    $okButton.Add_Click({
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+        $form.Close()
+    })
+    $rootPanel.Controls.Add($okButton)
+    $form.AcceptButton = $okButton
+
+    try {
+        $form.ShowDialog() | Out-Null
+    }
+    finally {
+        $form.Dispose()
+    }
+}
+
+function Get-DeskPurgeBatchQueuePaths {
+    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $queueKey = ($identity.User.Value -replace '[^a-zA-Z0-9]', '_')
+    $queueDirectory = Join-Path -Path $env:TEMP -ChildPath 'DeskPurge'
+
+    return [pscustomobject]@{
+        Key = $queueKey
+        Directory = $queueDirectory
+        QueueFile = Join-Path -Path $queueDirectory -ChildPath "BatchQueue_$queueKey.txt"
+        MarkerFile = Join-Path -Path $queueDirectory -ChildPath "BatchQueue_$queueKey.owner"
+        MutexName = "Local\DeskPurgeBatchQueue_$queueKey"
+    }
+}
+
+function Add-DeskPurgeBatchQueue {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    $state = Get-DeskPurgeBatchQueuePaths
+    $mutex = [System.Threading.Mutex]::new($false, $state.MutexName)
+    $hasHandle = $false
+
+    try {
+        $hasHandle = $mutex.WaitOne(10000)
+        if (-not $hasHandle) {
+            throw "Timed out waiting for the DeskPurge batch queue."
+        }
+
+        New-Item -Path $state.Directory -ItemType Directory -Force | Out-Null
+        foreach ($path in (Get-DeskPurgeUniqueShortcutPaths -Paths $Paths)) {
+            Add-Content -LiteralPath $state.QueueFile -Value $path -Encoding UTF8
+        }
+
+        $shouldOpen = $false
+        $markerIsStale = $false
+        if (Test-Path -LiteralPath $state.MarkerFile -PathType Leaf) {
+            $markerAge = (Get-Date) - (Get-Item -LiteralPath $state.MarkerFile).LastWriteTime
+            $markerIsStale = $markerAge.TotalSeconds -gt 20
+        }
+
+        if ((-not (Test-Path -LiteralPath $state.MarkerFile -PathType Leaf)) -or $markerIsStale) {
+            Set-Content -LiteralPath $state.MarkerFile -Value $PID -Encoding ASCII
+            $shouldOpen = $true
+        }
+
+        return [pscustomobject]@{
+            ShouldOpen = $shouldOpen
+            State = $state
+        }
+    }
+    finally {
+        if ($hasHandle) {
+            $mutex.ReleaseMutex()
+        }
+        $mutex.Dispose()
+    }
+}
+
+function Read-DeskPurgeBatchQueue {
+    param([Parameter(Mandatory = $true)]$State)
+
+    $mutex = [System.Threading.Mutex]::new($false, $State.MutexName)
+    $hasHandle = $false
+
+    try {
+        $hasHandle = $mutex.WaitOne(10000)
+        if (-not $hasHandle) {
+            throw "Timed out reading the DeskPurge batch queue."
+        }
+
+        $queuedPaths = @()
+        if (Test-Path -LiteralPath $State.QueueFile -PathType Leaf) {
+            $queuedPaths = Get-Content -LiteralPath $State.QueueFile -Encoding UTF8
+            Remove-Item -LiteralPath $State.QueueFile -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $State.MarkerFile -PathType Leaf) {
+            Remove-Item -LiteralPath $State.MarkerFile -Force -ErrorAction SilentlyContinue
+        }
+
+        return Get-DeskPurgeUniqueShortcutPaths -Paths $queuedPaths
+    }
+    finally {
+        if ($hasHandle) {
+            $mutex.ReleaseMutex()
+        }
+        $mutex.Dispose()
+    }
+}
+
+function New-DeskPurgeBatchErrorPlan {
+    param(
+        [Parameter(Mandatory = $true)][string]$ShortcutPath,
+        [Parameter(Mandatory = $true)][string]$Status,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    return [pscustomobject]@{
+        ShortcutPath = $ShortcutPath
+        ShortcutName = Split-Path -Path $ShortcutPath -Leaf
+        TargetPath = $null
+        FolderToDelete = $null
+        FolderSizeDisplay = 'N/A'
+        ProtectedBoundary = $null
+        Status = $Status
+        Message = $Message
+    }
+}
+
+function Get-DeskPurgeProtectedFolderSetupCandidates {
+    param([Parameter(Mandatory = $true)][string[]]$ShortcutPaths)
+
+    $candidatesByPath = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $shell = $null
+
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        foreach ($shortcutPath in (Get-DeskPurgeUniqueShortcutPaths -Paths $ShortcutPaths)) {
+            if ([string]::IsNullOrWhiteSpace($shortcutPath) -or -not $shortcutPath.ToLowerInvariant().EndsWith('.lnk')) {
+                continue
+            }
+            if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
+                continue
+            }
+
+            $shortcut = $null
+            try {
+                $shortcut = $shell.CreateShortcut($shortcutPath)
+                foreach ($candidate in (Get-DeskPurgeProtectedFolderCandidatesFromTargetPath -TargetPath $shortcut.TargetPath)) {
+                    Add-DeskPurgeProtectedFolderCandidate `
+                        -CandidatesByPath $candidatesByPath `
+                        -Path $candidate.Path `
+                        -Source $candidate.Source
+                }
+            }
+            catch {
+                continue
+            }
+            finally {
+                if ($null -ne $shortcut) {
+                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) | Out-Null
+                }
+            }
+        }
+    }
+    catch {
+        # Fall through to common-folder detection below.
+    }
+    finally {
+        if ($null -ne $shell) {
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null
+        }
+    }
+
+    foreach ($commonPath in (Get-DeskPurgeCommonProtectedFolderCandidatePaths)) {
+        Add-DeskPurgeProtectedFolderCandidate `
+            -CandidatesByPath $candidatesByPath `
+            -Path $commonPath `
+            -Source 'Existing common game-library folder'
+    }
+
+    return @($candidatesByPath.Values | Sort-Object Path)
+}
+
+function Save-DeskPurgeProtectedFoldersConfig {
+    param(
+        [Parameter(Mandatory = $true)][string]$ConfigFile,
+        [Parameter(Mandatory = $true)][string[]]$ProtectedFolderPaths
+    )
+
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm'
+    $configLines = @(
+        '# DeskPurge Protected Folders Configuration'
+        '#'
+        "# Generated by DeskPurge setup on $timestamp."
+        '# These folders are stop boundaries. DeskPurge deletes the game folder below one of these boundaries.'
+        '# Review these paths before each destructive cleanup if you move your game libraries.'
+        ''
+        '# Confirmed game library boundaries:'
+    ) + $ProtectedFolderPaths
+
+    $configLines | Set-Content -LiteralPath $ConfigFile -Encoding UTF8
+}
+
+function Show-DeskPurgeProtectedFolderSetup {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ShortcutPaths,
+        [Parameter(Mandatory = $true)][string]$ConfigFile,
+        [Parameter(Mandatory = $true)][string]$SetupError
+    )
+
+    $candidates = @(Get-DeskPurgeProtectedFolderSetupCandidates -ShortcutPaths $ShortcutPaths)
+    if ($candidates.Count -eq 0) {
+        Show-DeskPurgeBatchMessage `
+            -Title 'Setup Needed' `
+            -Heading 'Protected folders are required' `
+            -Message "DeskPurge needs at least one protected game-library folder before it can delete anything.`n`nConfig file:`n$ConfigFile`n`nTechnical detail:`n$SetupError`n`nNo candidates were detected automatically. Add your game library root to DeskPurge_ProtectedFolders.txt and run DeskPurge again." `
+            -Type 'Error'
+        return $false
+    }
+
+    $base = New-DeskPurgeBatchBaseForm -Title 'DeskPurge Setup' -Width 920 -Height 640
+    $form = $base.Form
+    $rootPanel = $base.Root
+    $palette = $base.Palette
+    $contentX = 32
+    $contentWidth = 854
+
+    $badgeLabel = [System.Windows.Forms.Label]::new()
+    $badgeLabel.Location = [System.Drawing.Point]::new($contentX, 66)
+    $badgeLabel.Size = [System.Drawing.Size]::new(104, 26)
+    $badgeLabel.Text = 'SETUP'
+    $badgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $badgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+    $badgeLabel.BackColor = [System.Drawing.Color]::FromArgb(69, 26, 3)
+    $badgeLabel.ForeColor = $palette.Warning
+    $rootPanel.Controls.Add($badgeLabel)
+
+    $headingLabel = [System.Windows.Forms.Label]::new()
+    $headingLabel.Location = [System.Drawing.Point]::new($contentX, 104)
+    $headingLabel.Size = [System.Drawing.Size]::new($contentWidth, 34)
+    $headingLabel.Text = 'Confirm protected folders'
+    $headingLabel.Font = [System.Drawing.Font]::new('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
+    $headingLabel.ForeColor = $palette.Text
+    $rootPanel.Controls.Add($headingLabel)
+
+    $messageLabel = [System.Windows.Forms.Label]::new()
+    $messageLabel.Location = [System.Drawing.Point]::new($contentX, 144)
+    $messageLabel.Size = [System.Drawing.Size]::new($contentWidth, 48)
+    $messageLabel.Text = 'DeskPurge needs stop boundaries before it can delete folders. Review the detected library roots, keep only paths that directly contain game folders, then save.'
+    $messageLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9)
+    $messageLabel.ForeColor = $palette.BodyText
+    $messageLabel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($messageLabel)
+
+    $grid = [System.Windows.Forms.DataGridView]::new()
+    $grid.Location = [System.Drawing.Point]::new($contentX, 206)
+    $grid.Size = [System.Drawing.Size]::new($contentWidth, 306)
+    Set-DeskPurgeBatchGridStyle -Grid $grid
+    $rootPanel.Controls.Add($grid)
+
+    $selectedColumn = [System.Windows.Forms.DataGridViewCheckBoxColumn]::new()
+    $selectedColumn.Name = 'Selected'
+    $selectedColumn.HeaderText = ''
+    $selectedColumn.Width = 42
+    $grid.Columns.Add($selectedColumn) | Out-Null
+
+    foreach ($column in @(
+        @{ Name = 'Folder'; Text = 'Protected folder'; Width = 452 },
+        @{ Name = 'Source'; Text = 'Detected from'; Width = 350 }
+    )) {
+        $textColumn = [System.Windows.Forms.DataGridViewTextBoxColumn]::new()
+        $textColumn.Name = $column.Name
+        $textColumn.HeaderText = $column.Text
+        $textColumn.Width = $column.Width
+        $textColumn.ReadOnly = $true
+        $grid.Columns.Add($textColumn) | Out-Null
+    }
+
+    foreach ($candidate in $candidates) {
+        $rowIndex = $grid.Rows.Add($true, $candidate.Path, $candidate.Source)
+        $grid.Rows[$rowIndex].Tag = $candidate
+    }
+
+    $summaryLabel = [System.Windows.Forms.Label]::new()
+    $summaryLabel.Location = [System.Drawing.Point]::new($contentX, 526)
+    $summaryLabel.Size = [System.Drawing.Size]::new(600, 24)
+    $summaryLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+    $summaryLabel.ForeColor = $palette.MutedText
+    $summaryLabel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($summaryLabel)
+
+    $divider = [System.Windows.Forms.Panel]::new()
+    $divider.Location = [System.Drawing.Point]::new($contentX, 554)
+    $divider.Size = [System.Drawing.Size]::new($contentWidth, 1)
+    $divider.BackColor = $palette.Divider
+    $rootPanel.Controls.Add($divider)
+
+    $buttonPanel = [System.Windows.Forms.FlowLayoutPanel]::new()
+    $buttonPanel.Location = [System.Drawing.Point]::new($contentX, 576)
+    $buttonPanel.Size = [System.Drawing.Size]::new($contentWidth, 40)
+    $buttonPanel.FlowDirection = [System.Windows.Forms.FlowDirection]::RightToLeft
+    $buttonPanel.WrapContents = $false
+    $buttonPanel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($buttonPanel)
+
+    $saveButton = [System.Windows.Forms.Button]::new()
+    $saveButton.Text = 'Save folders'
+    Set-DeskPurgeBatchButtonStyle -Button $saveButton -Variant 'Primary'
+    $buttonPanel.Controls.Add($saveButton)
+
+    $cancelButton = [System.Windows.Forms.Button]::new()
+    $cancelButton.Text = 'Cancel'
+    Set-DeskPurgeBatchButtonStyle -Button $cancelButton -Variant 'Secondary'
+    $buttonPanel.Controls.Add($cancelButton)
+    $form.CancelButton = $cancelButton
+
+    function Update-DeskPurgeProtectedFolderSetupSummary {
+        $selectedCount = 0
+        foreach ($row in $grid.Rows) {
+            if ([bool]$row.Cells['Selected'].Value) {
+                $selectedCount++
+            }
+        }
+
+        $summaryLabel.Text = "$selectedCount protected folder(s) selected"
+        $saveButton.Enabled = $selectedCount -gt 0
+    }
+
+    $grid.Add_CurrentCellDirtyStateChanged({
+        if ($grid.IsCurrentCellDirty) {
+            $grid.CommitEdit([System.Windows.Forms.DataGridViewDataErrorContexts]::Commit) | Out-Null
+        }
+    })
+    $grid.Add_CellValueChanged({ Update-DeskPurgeProtectedFolderSetupSummary })
+
+    $cancelButton.Add_Click({
+        $form.Tag = $false
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+        $form.Close()
+    })
+
+    $saveButton.Add_Click({
+        $selectedPaths = [System.Collections.Generic.List[string]]::new()
+        foreach ($row in $grid.Rows) {
+            if ([bool]$row.Cells['Selected'].Value) {
+                $selectedPaths.Add([string]$row.Cells['Folder'].Value)
+            }
+        }
+
+        try {
+            Save-DeskPurgeProtectedFoldersConfig -ConfigFile $ConfigFile -ProtectedFolderPaths ([string[]]$selectedPaths.ToArray())
+            $form.Tag = $true
+            $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+            $form.Close()
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Could not save protected folders.`n`n$($_.Exception.Message)",
+                "Save Failed",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error
+            ) | Out-Null
+        }
+    })
+
+    $form.Tag = $false
+    Update-DeskPurgeProtectedFolderSetupSummary
+
+    try {
+        $form.ShowDialog() | Out-Null
+        return [bool]$form.Tag
+    }
+    finally {
+        $form.Dispose()
+    }
+}
+
+function Resolve-DeskPurgeBatchPlans {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    $systemProtectedPaths = Get-DeskPurgeSystemProtectedPaths
+    try {
+        $userProtectedGameFolders = Get-ProtectedGameFolders -ConfigFile $ProtectedFoldersConfigFile
+    }
+    catch {
+        $setupCompleted = Show-DeskPurgeProtectedFolderSetup `
+            -ShortcutPaths $Paths `
+            -ConfigFile $ProtectedFoldersConfigFile `
+            -SetupError $_.Exception.Message
+
+        if (-not $setupCompleted) {
+            exit 1
+        }
+
+        try {
+            $userProtectedGameFolders = Get-ProtectedGameFolders -ConfigFile $ProtectedFoldersConfigFile
+        }
+        catch {
+            Show-DeskPurgeBatchMessage `
+                -Title 'Setup Needed' `
+                -Heading 'Protected folders are required' `
+                -Message "DeskPurge still could not load protected folders after setup.`n`nConfig file:`n$ProtectedFoldersConfigFile`n`nTechnical detail:`n$($_.Exception.Message)`n`nNo deletion was attempted." `
+                -Type 'Error'
+            exit 1
+        }
+    }
+
+    $plans = [System.Collections.Generic.List[object]]::new()
+    $shell = $null
+    $isElevated = Test-DeskPurgeCurrentProcessElevated
+
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+
+        foreach ($path in (Get-DeskPurgeUniqueShortcutPaths -Paths $Paths)) {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+                continue
+            }
+
+            if (-not $path.ToLowerInvariant().EndsWith('.lnk')) {
+                $plans.Add((New-DeskPurgeBatchErrorPlan -ShortcutPath $path -Status 'Error' -Message 'Not a shortcut (.lnk) file.'))
+                continue
+            }
+
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                $plans.Add((New-DeskPurgeBatchErrorPlan -ShortcutPath $path -Status 'Error' -Message 'Shortcut file no longer exists.'))
+                continue
+            }
+
+            $shortcut = $null
+            try {
+                $shortcut = $shell.CreateShortcut($path)
+                $targetPath = $shortcut.TargetPath
+                $plan = New-DeskPurgeShortcutPlan `
+                    -ShortcutPath $path `
+                    -TargetPath $targetPath `
+                    -SystemProtectedPaths $systemProtectedPaths `
+                    -UserProtectedFolders $userProtectedGameFolders `
+                    -IsElevated $isElevated
+                $plans.Add($plan)
+            }
+            catch {
+                $plans.Add((New-DeskPurgeBatchErrorPlan -ShortcutPath $path -Status 'Error' -Message $_.Exception.Message))
+            }
+            finally {
+                if ($null -ne $shortcut) {
+                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) | Out-Null
+                }
+            }
+        }
+    }
+    finally {
+        if ($null -ne $shell) {
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null
+        }
+    }
+
+    return [object[]]$plans.ToArray()
+}
+
+function Set-DeskPurgeBatchGridStyle {
+    param([Parameter(Mandatory = $true)][System.Windows.Forms.DataGridView]$Grid)
+
+    $palette = Get-DeskPurgeBatchPalette
+    $Grid.BackgroundColor = $palette.Card
+    $Grid.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+    $Grid.EnableHeadersVisualStyles = $false
+    $Grid.GridColor = $palette.Divider
+    $Grid.RowHeadersVisible = $false
+    $Grid.AllowUserToAddRows = $false
+    $Grid.AllowUserToDeleteRows = $false
+    $Grid.AllowUserToResizeRows = $false
+    $Grid.MultiSelect = $false
+    $Grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+    $Grid.AutoSizeRowsMode = [System.Windows.Forms.DataGridViewAutoSizeRowsMode]::None
+    $Grid.ColumnHeadersHeight = 34
+    $Grid.RowTemplate.Height = 32
+    $Grid.ColumnHeadersDefaultCellStyle.BackColor = $palette.Panel
+    $Grid.ColumnHeadersDefaultCellStyle.ForeColor = $palette.MutedText
+    $Grid.ColumnHeadersDefaultCellStyle.Font = [System.Drawing.Font]::new('Segoe UI', 8.5, [System.Drawing.FontStyle]::Bold)
+    $Grid.DefaultCellStyle.BackColor = $palette.Card
+    $Grid.DefaultCellStyle.ForeColor = $palette.BodyText
+    $Grid.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(58, 55, 50)
+    $Grid.DefaultCellStyle.SelectionForeColor = $palette.Text
+    $Grid.AlternatingRowsDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(27, 27, 26)
+}
+
+function Set-DeskPurgeBatchRowStatusStyle {
+    param([Parameter(Mandatory = $true)][System.Windows.Forms.DataGridViewRow]$Row)
+
+    $palette = Get-DeskPurgeBatchPalette
+    $plan = $Row.Tag
+    $statusCell = $Row.Cells['Status']
+
+    switch ($plan.Status) {
+        'Ready' {
+            $statusCell.Style.ForeColor = $palette.Success
+        }
+        'Needs admin' {
+            $statusCell.Style.ForeColor = $palette.Warning
+        }
+        default {
+            $statusCell.Style.ForeColor = $palette.Danger
+        }
+    }
+
+    if ($plan.Status -ne 'Ready') {
+        $Row.Cells['Selected'].ReadOnly = $true
+        $Row.Cells['Selected'].Value = $false
+        $Row.DefaultCellStyle.ForeColor = $palette.MutedText
+    }
+}
+
+function Get-DeskPurgeStatusDisplay {
+    param([Parameter(Mandatory = $true)]$Plan)
+
+    if ($Plan.Status -eq 'Ready' -or [string]::IsNullOrWhiteSpace($Plan.Message) -or $Plan.Message -eq $Plan.Status) {
+        return $Plan.Status
+    }
+
+    return "$($Plan.Status): $($Plan.Message)"
+}
+
+function Open-DeskPurgeBatchFolder {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     if (Test-Path -LiteralPath $Path -PathType Container) {
@@ -173,236 +810,163 @@ function Open-DeskPurgeFolder {
     }
 }
 
-function Show-DeskPurgeDialog {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Title,
+function Show-DeskPurgeSingleReview {
+    param([Parameter(Mandatory = $true)]$Plan)
 
-        [Parameter(Mandatory = $true)]
-        [string]$Heading,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-
-        [ValidateSet('Info', 'Warning', 'Error', 'Question', 'Success')]
-        [string]$Type = 'Info',
-
-        [hashtable[]]$Details = @(),
-
-        [string]$PrimaryButtonText = 'OK',
-        [string]$SecondaryButtonText,
-
-        [ValidateSet('OK', 'Yes')]
-        [string]$PrimaryResult = 'OK',
-
-        [switch]$PrimaryIsDanger,
-
-        [string]$AuxiliaryButtonText,
-
-        [scriptblock]$AuxiliaryButtonAction
-    )
-
-    Initialize-DeskPurgeGui
-
-    $theme = Get-DeskPurgeDialogTheme -Type $Type
-    $hasDetails = $Details.Count -gt 0
-    $formWidth = 760
-    $formHeight = if ($hasDetails) { 554 } else { 430 }
-    $rootWidth = $formWidth - 2
-    $rootHeight = $formHeight - 2
+    $base = New-DeskPurgeBatchBaseForm -Title 'DeskPurge Uninstall' -Width 760 -Height 640
+    $form = $base.Form
+    $rootPanel = $base.Root
+    $palette = $base.Palette
     $contentX = 32
-    $contentWidth = $rootWidth - 64
-    $surface = [System.Drawing.Color]::FromArgb(18, 18, 17)
-    $panel = [System.Drawing.Color]::FromArgb(24, 24, 23)
-    $card = [System.Drawing.Color]::FromArgb(31, 31, 30)
-    $border = [System.Drawing.Color]::FromArgb(67, 63, 57)
-    $divider = [System.Drawing.Color]::FromArgb(48, 45, 41)
-    $text = [System.Drawing.Color]::FromArgb(250, 250, 249)
-    $mutedText = [System.Drawing.Color]::FromArgb(168, 162, 158)
-    $bodyText = [System.Drawing.Color]::FromArgb(214, 211, 205)
-    $resultMap = @{
-        OK = [System.Windows.Forms.DialogResult]::OK
-        Yes = [System.Windows.Forms.DialogResult]::Yes
+    $contentWidth = 694
+    $statusIsReady = $Plan.Status -eq 'Ready'
+    $statusAccent = switch ($Plan.Status) {
+        'Ready' { $palette.Success }
+        'Needs admin' { $palette.Warning }
+        default { $palette.Danger }
     }
-
-    $form = [System.Windows.Forms.Form]::new()
-    $form.Text = $Title
-    $form.ClientSize = [System.Drawing.Size]::new($formWidth, $formHeight)
-    $form.MinimumSize = [System.Drawing.Size]::new($formWidth, $formHeight)
-    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
-    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-    $form.MaximizeBox = $false
-    $form.MinimizeBox = $false
-    $form.ShowInTaskbar = $true
-    $form.TopMost = $true
-    $form.BackColor = $border
-    $form.Font = [System.Drawing.Font]::new('Segoe UI', 9)
-    $form.KeyPreview = $true
-    $cornerRadius = 18
-    $cornerPath = [System.Drawing.Drawing2D.GraphicsPath]::new()
-    $cornerPath.AddArc(0, 0, $cornerRadius, $cornerRadius, 180, 90)
-    $cornerPath.AddArc($formWidth - $cornerRadius - 1, 0, $cornerRadius, $cornerRadius, 270, 90)
-    $cornerPath.AddArc($formWidth - $cornerRadius - 1, $formHeight - $cornerRadius - 1, $cornerRadius, $cornerRadius, 0, 90)
-    $cornerPath.AddArc(0, $formHeight - $cornerRadius - 1, $cornerRadius, $cornerRadius, 90, 90)
-    $cornerPath.CloseFigure()
-    $form.Region = [System.Drawing.Region]::new($cornerPath)
-
-    $rootPanel = [System.Windows.Forms.Panel]::new()
-    $rootPanel.Location = [System.Drawing.Point]::new(1, 1)
-    $rootPanel.Size = [System.Drawing.Size]::new($rootWidth, $rootHeight)
-    $rootPanel.BackColor = $surface
-    $form.Controls.Add($rootPanel)
-
-    $titleBar = [System.Windows.Forms.Panel]::new()
-    $titleBar.Location = [System.Drawing.Point]::new(0, 0)
-    $titleBar.Size = [System.Drawing.Size]::new($rootWidth, 44)
-    $titleBar.BackColor = $panel
-    $rootPanel.Controls.Add($titleBar)
-    Add-DeskPurgeDragRegion -Form $form -Control $titleBar
-
-    $titleLabel = [System.Windows.Forms.Label]::new()
-    $titleLabel.Location = [System.Drawing.Point]::new(20, 0)
-    $titleLabel.Size = [System.Drawing.Size]::new(520, 44)
-    $titleLabel.Text = 'DeskPurge'
-    $titleLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-    $titleLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
-    $titleLabel.ForeColor = $mutedText
-    $titleBar.Controls.Add($titleLabel)
-    Add-DeskPurgeDragRegion -Form $form -Control $titleLabel
-
-    $closeButton = [System.Windows.Forms.Button]::new()
-    $closeButton.Location = [System.Drawing.Point]::new($rootWidth - 44, 0)
-    $closeButton.Size = [System.Drawing.Size]::new(44, 44)
-    $closeButton.Text = 'X'
-    $closeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $closeButton.FlatAppearance.BorderSize = 0
-    $closeButton.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(47, 45, 40)
-    $closeButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(67, 63, 57)
-    $closeButton.BackColor = $panel
-    $closeButton.ForeColor = $mutedText
-    $closeButton.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
-    $closeButton.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $titleBar.Controls.Add($closeButton)
+    $badgeBack = switch ($Plan.Status) {
+        'Ready' { [System.Drawing.Color]::FromArgb(5, 46, 22) }
+        'Needs admin' { [System.Drawing.Color]::FromArgb(69, 26, 3) }
+        default { [System.Drawing.Color]::FromArgb(69, 10, 10) }
+    }
 
     $badgeLabel = [System.Windows.Forms.Label]::new()
     $badgeLabel.Location = [System.Drawing.Point]::new($contentX, 70)
     $badgeLabel.Size = [System.Drawing.Size]::new(96, 26)
-    $badgeLabel.Text = $theme.BadgeText
+    $badgeLabel.Text = $Plan.Status.ToUpperInvariant()
     $badgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
     $badgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
-    $badgeLabel.BackColor = $theme.BadgeBack
-    $badgeLabel.ForeColor = $theme.Accent
+    $badgeLabel.BackColor = $badgeBack
+    $badgeLabel.ForeColor = $statusAccent
     $rootPanel.Controls.Add($badgeLabel)
 
     $headingLabel = [System.Windows.Forms.Label]::new()
     $headingLabel.Location = [System.Drawing.Point]::new($contentX, 108)
     $headingLabel.Size = [System.Drawing.Size]::new($contentWidth, 34)
-    $headingLabel.Text = $Heading
+    $headingLabel.Text = 'Delete this game folder?'
     $headingLabel.Font = [System.Drawing.Font]::new('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
-    $headingLabel.ForeColor = $text
+    $headingLabel.ForeColor = $palette.Text
     $rootPanel.Controls.Add($headingLabel)
 
-    $messageHeight = if ($hasDetails) { 56 } else { 180 }
     $messageLabel = [System.Windows.Forms.Label]::new()
     $messageLabel.Location = [System.Drawing.Point]::new($contentX, 148)
-    $messageLabel.Size = [System.Drawing.Size]::new($contentWidth, $messageHeight)
-    $messageLabel.Text = $Message
+    $messageLabel.Size = [System.Drawing.Size]::new($contentWidth, 52)
+    $messageLabel.Text = if ($statusIsReady) {
+        'DeskPurge found the install folder for this shortcut. Review the target carefully before continuing.'
+    }
+    else {
+        "DeskPurge cannot delete this item yet: $($Plan.Message)"
+    }
     $messageLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9)
-    $messageLabel.ForeColor = $bodyText
-    $messageLabel.BackColor = $surface
+    $messageLabel.ForeColor = $palette.BodyText
+    $messageLabel.BackColor = $palette.Surface
     $rootPanel.Controls.Add($messageLabel)
 
-    if ($hasDetails) {
-        $detailsPanelHeight = [Math]::Max(168, [Math]::Min(250, ($Details.Count * 38) + 28))
-        $detailsPanel = [System.Windows.Forms.Panel]::new()
-        $detailsPanel.Location = [System.Drawing.Point]::new($contentX, 224)
-        $detailsPanel.Size = [System.Drawing.Size]::new($contentWidth, $detailsPanelHeight)
-        $detailsPanel.BackColor = $card
-        $rootPanel.Controls.Add($detailsPanel)
+    $detailsPanel = [System.Windows.Forms.Panel]::new()
+    $detailsPanel.Location = [System.Drawing.Point]::new($contentX, 224)
+    $detailsPanel.Size = [System.Drawing.Size]::new($contentWidth, 250)
+    $detailsPanel.BackColor = $palette.Card
+    $rootPanel.Controls.Add($detailsPanel)
 
-        $accentStrip = [System.Windows.Forms.Panel]::new()
-        $accentStrip.Location = [System.Drawing.Point]::new(0, 0)
-        $accentStrip.Size = [System.Drawing.Size]::new(3, $detailsPanelHeight)
-        $accentStrip.BackColor = $theme.AccentStrong
-        $detailsPanel.Controls.Add($accentStrip)
+    $accentStrip = [System.Windows.Forms.Panel]::new()
+    $accentStrip.Location = [System.Drawing.Point]::new(0, 0)
+    $accentStrip.Size = [System.Drawing.Size]::new(3, 250)
+    $accentStrip.BackColor = $statusAccent
+    $detailsPanel.Controls.Add($accentStrip)
 
-        $detailY = 16
-        $rowIndex = 0
-        foreach ($detail in $Details) {
-            $label = [System.Windows.Forms.Label]::new()
-            $label.Location = [System.Drawing.Point]::new(22, $detailY + 3)
-            $label.Size = [System.Drawing.Size]::new(112, 24)
-            $label.Text = [string]$detail.Label
-            $label.Font = [System.Drawing.Font]::new('Segoe UI', 8.5, [System.Drawing.FontStyle]::Bold)
-            $label.ForeColor = $mutedText
-            $label.BackColor = $card
-            $detailsPanel.Controls.Add($label)
+    $details = @(
+        @{ Label = 'Folder'; Value = $Plan.FolderToDelete }
+        @{ Label = 'Size'; Value = $Plan.FolderSizeDisplay }
+        @{ Label = 'Shortcut'; Value = $Plan.ShortcutPath }
+        @{ Label = 'Target app'; Value = $Plan.TargetPath }
+        @{ Label = 'Boundary'; Value = $Plan.ProtectedBoundary }
+        @{ Label = 'Details'; Value = $Plan.Message }
+    )
 
-            $valueBox = [System.Windows.Forms.TextBox]::new()
-            $valueBox.Location = [System.Drawing.Point]::new(142, $detailY)
-            $valueBox.Size = [System.Drawing.Size]::new($contentWidth - 166, 24)
-            $valueBox.Text = [string]$detail.Value
-            $valueBox.ReadOnly = $true
-            $valueBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None
-            $valueBox.BackColor = $card
-            $valueBox.ForeColor = $text
-            $valueBox.Font = [System.Drawing.Font]::new('Consolas', 9)
-            $detailsPanel.Controls.Add($valueBox)
+    $detailY = 16
+    $rowIndex = 0
+    foreach ($detail in $details) {
+        $label = [System.Windows.Forms.Label]::new()
+        $label.Location = [System.Drawing.Point]::new(22, $detailY + 3)
+        $label.Size = [System.Drawing.Size]::new(112, 24)
+        $label.Text = [string]$detail.Label
+        $label.Font = [System.Drawing.Font]::new('Segoe UI', 8.5, [System.Drawing.FontStyle]::Bold)
+        $label.ForeColor = $palette.MutedText
+        $label.BackColor = $palette.Card
+        $detailsPanel.Controls.Add($label)
 
-            if ($rowIndex -lt ($Details.Count - 1)) {
-                $rowDivider = [System.Windows.Forms.Panel]::new()
-                $rowDivider.Location = [System.Drawing.Point]::new(22, $detailY + 31)
-                $rowDivider.Size = [System.Drawing.Size]::new($contentWidth - 44, 1)
-                $rowDivider.BackColor = $divider
-                $detailsPanel.Controls.Add($rowDivider)
-            }
+        $valueBox = [System.Windows.Forms.TextBox]::new()
+        $valueBox.Location = [System.Drawing.Point]::new(142, $detailY)
+        $valueBox.Size = [System.Drawing.Size]::new($contentWidth - 166, 24)
+        $valueBox.Text = [string]$detail.Value
+        $valueBox.ReadOnly = $true
+        $valueBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+        $valueBox.BackColor = $palette.Card
+        $valueBox.ForeColor = $palette.Text
+        $valueBox.Font = [System.Drawing.Font]::new('Consolas', 9)
+        $detailsPanel.Controls.Add($valueBox)
 
-            $detailY += 38
-            $rowIndex++
+        if ($rowIndex -lt ($details.Count - 1)) {
+            $rowDivider = [System.Windows.Forms.Panel]::new()
+            $rowDivider.Location = [System.Drawing.Point]::new(22, $detailY + 31)
+            $rowDivider.Size = [System.Drawing.Size]::new($contentWidth - 44, 1)
+            $rowDivider.BackColor = $palette.Divider
+            $detailsPanel.Controls.Add($rowDivider)
         }
+
+        $detailY += 38
+        $rowIndex++
     }
 
-    $accentLine = [System.Windows.Forms.Panel]::new()
-    $accentLine.Location = [System.Drawing.Point]::new($contentX, $rootHeight - 86)
-    $accentLine.Size = [System.Drawing.Size]::new($contentWidth, 1)
-    $accentLine.BackColor = $divider
-    $rootPanel.Controls.Add($accentLine)
+    $divider = [System.Windows.Forms.Panel]::new()
+    $divider.Location = [System.Drawing.Point]::new($contentX, 546)
+    $divider.Size = [System.Drawing.Size]::new($contentWidth, 1)
+    $divider.BackColor = $palette.Divider
+    $rootPanel.Controls.Add($divider)
 
     $buttonPanel = [System.Windows.Forms.FlowLayoutPanel]::new()
-    $buttonPanel.Location = [System.Drawing.Point]::new($contentX, $rootHeight - 64)
+    $buttonPanel.Location = [System.Drawing.Point]::new($contentX, 568)
     $buttonPanel.Size = [System.Drawing.Size]::new($contentWidth, 40)
     $buttonPanel.FlowDirection = [System.Windows.Forms.FlowDirection]::RightToLeft
     $buttonPanel.WrapContents = $false
-    $buttonPanel.BackColor = $surface
+    $buttonPanel.BackColor = $palette.Surface
     $rootPanel.Controls.Add($buttonPanel)
 
-    $primaryButton = [System.Windows.Forms.Button]::new()
-    $primaryButton.Text = $PrimaryButtonText
-    $primaryButton.DialogResult = $resultMap[$PrimaryResult]
-    Set-DeskPurgeButtonStyle -Button $primaryButton -Variant $(if ($PrimaryIsDanger) { 'Danger' } else { 'Primary' })
-    $buttonPanel.Controls.Add($primaryButton)
+    $deleteButton = [System.Windows.Forms.Button]::new()
+    $deleteButton.Text = 'Delete folder'
+    $deleteButton.Enabled = $statusIsReady
+    Set-DeskPurgeBatchButtonStyle -Button $deleteButton -Variant 'Danger'
+    $buttonPanel.Controls.Add($deleteButton)
 
-    $secondaryButton = $null
-    if (-not [string]::IsNullOrWhiteSpace($SecondaryButtonText)) {
-        $secondaryButton = [System.Windows.Forms.Button]::new()
-        $secondaryButton.Text = $SecondaryButtonText
-        $secondaryButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-        Set-DeskPurgeButtonStyle -Button $secondaryButton -Variant 'Secondary'
-        $buttonPanel.Controls.Add($secondaryButton)
-        $form.CancelButton = $secondaryButton
+    $cancelButton = [System.Windows.Forms.Button]::new()
+    $cancelButton.Text = 'Cancel'
+    Set-DeskPurgeBatchButtonStyle -Button $cancelButton -Variant 'Secondary'
+    $buttonPanel.Controls.Add($cancelButton)
+    $form.CancelButton = $cancelButton
+
+    if ($Plan.Status -eq 'Needs admin' -and -not (Test-DeskPurgeCurrentProcessElevated)) {
+        $restartButton = [System.Windows.Forms.Button]::new()
+        $restartButton.Text = 'Restart as admin'
+        $restartButton.Width = 156
+        Set-DeskPurgeBatchButtonStyle -Button $restartButton -Variant 'Quiet'
+        $buttonPanel.Controls.Add($restartButton)
+        $restartButton.Add_Click({
+            $form.Tag = [pscustomobject]@{ Action = 'Elevate'; Selected = @() }
+            $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+            $form.Close()
+        })
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($AuxiliaryButtonText) -and $null -ne $AuxiliaryButtonAction) {
-        $auxiliaryButton = [System.Windows.Forms.Button]::new()
-        $auxiliaryButton.Text = $AuxiliaryButtonText
-        Set-DeskPurgeButtonStyle -Button $auxiliaryButton -Variant 'Quiet'
-        if ($AuxiliaryButtonText.Length -gt 14) {
-            $auxiliaryButton.Width = 184
-        }
-        $auxiliaryButton.Add_Click({
+    if (-not [string]::IsNullOrWhiteSpace($Plan.FolderToDelete)) {
+        $openButton = [System.Windows.Forms.Button]::new()
+        $openButton.Text = 'Open Folder'
+        Set-DeskPurgeBatchButtonStyle -Button $openButton -Variant 'Quiet'
+        $buttonPanel.Controls.Add($openButton)
+        $openButton.Add_Click({
             try {
                 $form.TopMost = $false
-                & $AuxiliaryButtonAction
+                Open-DeskPurgeBatchFolder -Path $Plan.FolderToDelete
             }
             catch {
                 [System.Windows.Forms.MessageBox]::Show(
@@ -413,342 +977,524 @@ function Show-DeskPurgeDialog {
                 ) | Out-Null
             }
         })
-        $buttonPanel.Controls.Add($auxiliaryButton)
     }
 
-    $closeButton.Add_Click({
-        if (-not [string]::IsNullOrWhiteSpace($SecondaryButtonText)) {
-            $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-        }
-        else {
-            $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
-        }
+    $cancelButton.Add_Click({
+        $form.Tag = [pscustomobject]@{ Action = 'Cancel'; Selected = @() }
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
         $form.Close()
     })
 
-    $form.Add_KeyDown({
-        param($sender, $eventArgs)
-
-        if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Escape) {
-            if (-not [string]::IsNullOrWhiteSpace($SecondaryButtonText)) {
-                $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-            }
-            else {
-                $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
-            }
-            $form.Close()
-        }
+    $deleteButton.Add_Click({
+        $form.Tag = [pscustomobject]@{ Action = 'Delete'; Selected = [object[]]@($Plan) }
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+        $form.Close()
     })
 
-    if (-not $PrimaryIsDanger) {
-        $form.AcceptButton = $primaryButton
-    }
-    elseif ($null -ne $secondaryButton) {
-        $form.Add_Shown({ $secondaryButton.Focus() })
-    }
+    $form.Tag = [pscustomobject]@{ Action = 'Cancel'; Selected = @() }
 
     try {
-        return $form.ShowDialog()
+        $form.ShowDialog() | Out-Null
+        return $form.Tag
     }
     finally {
         $form.Dispose()
     }
 }
 
-function Show-Popup {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-        [Parameter(Mandatory = $true)]
-        [string]$Title,
-        [ValidateSet('Info', 'Warning', 'Error', 'Question')]
-        [string]$Type
-    )
+function Show-DeskPurgeBatchReview {
+    param([Parameter(Mandatory = $true)][object[]]$Plans)
 
-    $primaryText = 'OK'
-    $secondaryText = $null
-    $primaryResult = 'OK'
-    if ($Type -eq 'Question') {
-        $primaryText = 'Yes'
-        $secondaryText = 'Cancel'
-        $primaryResult = 'Yes'
+    $base = New-DeskPurgeBatchBaseForm -Title 'DeskPurge Uninstall'
+    $form = $base.Form
+    $rootPanel = $base.Root
+    $palette = $base.Palette
+    $contentX = 32
+    $contentWidth = 1054
+
+    $badgeLabel = [System.Windows.Forms.Label]::new()
+    $badgeLabel.Location = [System.Drawing.Point]::new($contentX, 66)
+    $badgeLabel.Size = [System.Drawing.Size]::new(108, 26)
+    $badgeLabel.Text = 'REVIEW'
+    $badgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $badgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+    $badgeLabel.BackColor = [System.Drawing.Color]::FromArgb(31, 31, 31)
+    $badgeLabel.ForeColor = $palette.Info
+    $rootPanel.Controls.Add($badgeLabel)
+
+    $headingLabel = [System.Windows.Forms.Label]::new()
+    $headingLabel.Location = [System.Drawing.Point]::new($contentX, 104)
+    $headingLabel.Size = [System.Drawing.Size]::new($contentWidth, 34)
+    $headingLabel.Text = 'Review selected shortcuts'
+    $headingLabel.Font = [System.Drawing.Font]::new('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
+    $headingLabel.ForeColor = $palette.Text
+    $rootPanel.Controls.Add($headingLabel)
+
+    $messageLabel = [System.Windows.Forms.Label]::new()
+    $messageLabel.Location = [System.Drawing.Point]::new($contentX, 144)
+    $messageLabel.Size = [System.Drawing.Size]::new($contentWidth, 42)
+    $messageLabel.Text = 'DeskPurge resolved these shortcuts into install folders. Only checked Ready rows will be permanently deleted.'
+    $messageLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9)
+    $messageLabel.ForeColor = $palette.BodyText
+    $messageLabel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($messageLabel)
+
+    $grid = [System.Windows.Forms.DataGridView]::new()
+    $grid.Location = [System.Drawing.Point]::new($contentX, 196)
+    $grid.Size = [System.Drawing.Size]::new($contentWidth, 390)
+    Set-DeskPurgeBatchGridStyle -Grid $grid
+    $rootPanel.Controls.Add($grid)
+
+    $selectedColumn = [System.Windows.Forms.DataGridViewCheckBoxColumn]::new()
+    $selectedColumn.Name = 'Selected'
+    $selectedColumn.HeaderText = ''
+    $selectedColumn.Width = 42
+    $grid.Columns.Add($selectedColumn) | Out-Null
+
+    foreach ($column in @(
+        @{ Name = 'Shortcut'; Text = 'Shortcut'; Width = 170 },
+        @{ Name = 'Status'; Text = 'Status'; Width = 248 },
+        @{ Name = 'Size'; Text = 'Size'; Width = 92 },
+        @{ Name = 'Folder'; Text = 'Folder to delete'; Width = 280 },
+        @{ Name = 'Target'; Text = 'Target app'; Width = 230 }
+    )) {
+        $textColumn = [System.Windows.Forms.DataGridViewTextBoxColumn]::new()
+        $textColumn.Name = $column.Name
+        $textColumn.HeaderText = $column.Text
+        $textColumn.Width = $column.Width
+        $textColumn.ReadOnly = $true
+        $grid.Columns.Add($textColumn) | Out-Null
     }
 
-    $result = Show-DeskPurgeDialog `
-        -Title $Title `
-        -Heading $Title `
-        -Message $Message `
-        -Type $Type `
-        -PrimaryButtonText $primaryText `
-        -SecondaryButtonText $secondaryText `
-        -PrimaryResult $primaryResult
-
-    if ($Type -eq 'Error') { 
-        exit 1 
-    }
-    return $result
-}
-
-function Show-DeleteConfirmation {
-    param(
-        [Parameter(Mandatory = $true)][string]$FolderToDelete,
-        [Parameter(Mandatory = $true)][string]$FolderSizeDisplay,
-        [Parameter(Mandatory = $true)][string]$ShortcutPath,
-        [Parameter(Mandatory = $true)][string]$TargetPath,
-        [Parameter(Mandatory = $true)][string]$ProtectedBoundary
-    )
-
-    $details = @(
-        @{ Label = 'Folder'; Value = $FolderToDelete }
-        @{ Label = 'Size'; Value = $FolderSizeDisplay }
-        @{ Label = 'Shortcut'; Value = $ShortcutPath }
-        @{ Label = 'Target app'; Value = $TargetPath }
-        @{ Label = 'Boundary'; Value = $ProtectedBoundary }
-    )
-
-    return Show-DeskPurgeDialog `
-        -Title 'Confirm Permanent Delete' `
-        -Heading 'Delete this game folder?' `
-        -Message 'DeskPurge found the install folder for this shortcut. Review the target carefully before continuing. This permanently deletes the folder, then removes the shortcut.' `
-        -Type 'Question' `
-        -Details $details `
-        -PrimaryButtonText 'Delete folder' `
-        -SecondaryButtonText 'Cancel' `
-        -PrimaryResult 'Yes' `
-        -PrimaryIsDanger `
-        -AuxiliaryButtonText 'Open Folder' `
-        -AuxiliaryButtonAction ({ Open-DeskPurgeFolder -Path $FolderToDelete }.GetNewClosure())
-}
-
-function Show-CompletionSummary {
-    param(
-        [Parameter(Mandatory = $true)][string]$FolderToDelete,
-        [Parameter(Mandatory = $true)][string]$FolderSizeDisplay,
-        [Parameter(Mandatory = $true)][string]$ShortcutPath,
-        [Parameter(Mandatory = $true)][string]$LogFile,
-        [Parameter(Mandatory = $true)][bool]$ShortcutDeletedSuccessfully,
-        [string]$ShortcutDeletionError
-    )
-
-    if ($ShortcutDeletedSuccessfully) {
-        $containingFolder = Split-Path -Path $FolderToDelete -Parent
-        $details = @(
-            @{ Label = 'Folder'; Value = $FolderToDelete }
-            @{ Label = 'Shortcut'; Value = $ShortcutPath }
-            @{ Label = 'Freed'; Value = $FolderSizeDisplay }
-            @{ Label = 'Log'; Value = $LogFile }
+    foreach ($plan in $Plans) {
+        $rowIndex = $grid.Rows.Add(
+            ($plan.Status -eq 'Ready'),
+            $plan.ShortcutName,
+            (Get-DeskPurgeStatusDisplay -Plan $plan),
+            $plan.FolderSizeDisplay,
+            $plan.FolderToDelete,
+            $plan.TargetPath
         )
-
-        Show-DeskPurgeDialog `
-            -Title 'DeskPurge Complete' `
-            -Heading 'Game folder removed' `
-            -Message 'DeskPurge removed the install folder and shortcut.' `
-            -Type 'Success' `
-            -Details $details `
-            -PrimaryButtonText 'Done' `
-            -AuxiliaryButtonText 'Open Containing Folder' `
-            -AuxiliaryButtonAction ({ Open-DeskPurgeFolder -Path $containingFolder }.GetNewClosure()) | Out-Null
-        return
+        $row = $grid.Rows[$rowIndex]
+        $row.Tag = $plan
+        Set-DeskPurgeBatchRowStatusStyle -Row $row
     }
 
-    $containingFolder = Split-Path -Path $FolderToDelete -Parent
-    $details = @(
-        @{ Label = 'Folder'; Value = $FolderToDelete }
-        @{ Label = 'Shortcut'; Value = $ShortcutPath }
-        @{ Label = 'Freed'; Value = $FolderSizeDisplay }
-        @{ Label = 'Reason'; Value = $ShortcutDeletionError }
-        @{ Label = 'Log'; Value = $LogFile }
-    )
+    $summaryLabel = [System.Windows.Forms.Label]::new()
+    $summaryLabel.Location = [System.Drawing.Point]::new($contentX, 602)
+    $summaryLabel.Size = [System.Drawing.Size]::new(560, 24)
+    $summaryLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+    $summaryLabel.ForeColor = $palette.MutedText
+    $summaryLabel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($summaryLabel)
 
-    Show-DeskPurgeDialog `
-        -Title 'Shortcut Cleanup Needed' `
-        -Heading 'Folder removed, shortcut still present' `
-        -Message 'The game folder was deleted successfully, but DeskPurge could not remove the shortcut. You can delete the shortcut manually.' `
-        -Type 'Warning' `
-        -Details $details `
-        -PrimaryButtonText 'Done' `
-        -AuxiliaryButtonText 'Open Containing Folder' `
-        -AuxiliaryButtonAction ({ Open-DeskPurgeFolder -Path $containingFolder }.GetNewClosure()) | Out-Null
-}
+    $divider = [System.Windows.Forms.Panel]::new()
+    $divider.Location = [System.Drawing.Point]::new($contentX, 634)
+    $divider.Size = [System.Drawing.Size]::new($contentWidth, 1)
+    $divider.BackColor = $palette.Divider
+    $rootPanel.Controls.Add($divider)
 
-# --- Main Script Logic ---
-$ErrorActionPreference = 'Stop' # Default error action
+    $buttonPanel = [System.Windows.Forms.FlowLayoutPanel]::new()
+    $buttonPanel.Location = [System.Drawing.Point]::new($contentX, 656)
+    $buttonPanel.Size = [System.Drawing.Size]::new($contentWidth, 40)
+    $buttonPanel.FlowDirection = [System.Windows.Forms.FlowDirection]::RightToLeft
+    $buttonPanel.WrapContents = $false
+    $buttonPanel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($buttonPanel)
 
-if ([string]::IsNullOrWhiteSpace($LinkPathFromContextMenu)) {
-    Show-Popup -Message "Script was called without a shortcut path. Intended for context menu use." -Title "Usage Error" -Type "Error"
-}
+    $deleteButton = [System.Windows.Forms.Button]::new()
+    $deleteButton.Text = 'Delete selected'
+    $deleteButton.Width = 156
+    Set-DeskPurgeBatchButtonStyle -Button $deleteButton -Variant 'Danger'
+    $buttonPanel.Controls.Add($deleteButton)
 
-$finalLinkPath = $LinkPathFromContextMenu
-$targetExeName = $null
-$targetPath = $null # Declare $targetPath here to use it later
+    $cancelButton = [System.Windows.Forms.Button]::new()
+    $cancelButton.Text = 'Cancel'
+    Set-DeskPurgeBatchButtonStyle -Button $cancelButton -Variant 'Secondary'
+    $buttonPanel.Controls.Add($cancelButton)
+    $form.CancelButton = $cancelButton
 
-try {
-    # 1. Resolve Shortcut
-    if (-not (Test-Path -LiteralPath $finalLinkPath -PathType Leaf) -or -not ($finalLinkPath.ToLowerInvariant().EndsWith(".lnk"))) {
-        Show-Popup -Message "The provided item is not a valid shortcut (.lnk) file:`n$finalLinkPath" -Title "Invalid File" -Type "Error"
+    $restartButton = $null
+    $hasAdminRows = @($Plans | Where-Object { $_.Status -eq 'Needs admin' }).Count -gt 0
+    if ($hasAdminRows -and -not (Test-DeskPurgeCurrentProcessElevated)) {
+        $restartButton = [System.Windows.Forms.Button]::new()
+        $restartButton.Text = 'Restart as admin'
+        $restartButton.Width = 156
+        Set-DeskPurgeBatchButtonStyle -Button $restartButton -Variant 'Quiet'
+        $buttonPanel.Controls.Add($restartButton)
     }
 
-    $shell = $null; $shortcut = $null
-    try {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($finalLinkPath)
-        $targetPath = $shortcut.TargetPath # Assign to $targetPath
-        if ([string]::IsNullOrWhiteSpace($targetPath)) {
-            Show-Popup -Message "Could not find the target application for this shortcut:`n$finalLinkPath" -Title "Target Not Found" -Type "Error"
-        }
-        $targetExeName = Split-Path -Path $targetPath -Leaf
-    }
-    finally {
-        if ($null -ne $shortcut) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) | Out-Null }
-        if ($null -ne $shell) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null }
-    }
-
-    if (-not (Test-Path -LiteralPath $targetPath)) {
-        Show-Popup -Message "The target application path no longer exists:`n$targetPath" -Title "Target Missing" -Type "Error"
-    }
-
-    # 2. Determine the initial folder (immediate parent of the target)
-    $initialFolderCandidate = Split-Path -Path $targetPath -Parent
-    if ([string]::IsNullOrWhiteSpace($initialFolderCandidate) -or -not (Test-Path -LiteralPath $initialFolderCandidate -PathType Container)) {
-        Show-Popup -Message "Could not determine a valid initial parent folder for target:`n$targetPath" -Title "Folder Error" -Type "Error"
-    }
-
-    # --- System-level protected paths (always active) ---
-    $systemProtectedPaths = @(
-        'c:\windows', 'c:\program files', 'c:\program files (x86)',
-        "$([Environment]::GetFolderPath('UserProfile').TrimEnd('\').TrimEnd('/').ToLowerInvariant())",
-        "$([Environment]::GetFolderPath('CommonDesktopDirectory').TrimEnd('\').TrimEnd('/').ToLowerInvariant())",
-        "$([Environment]::GetFolderPath('Desktop').TrimEnd('\').TrimEnd('/').ToLowerInvariant())"
-    )
-    # --- User-defined game library folders (from config file) ---
-    try {
-        $userProtectedGameFolders = Get-ProtectedGameFolders -ConfigFile $ProtectedFoldersConfigFile
-    }
-    catch {
-        Show-Popup -Message "DeskPurge needs at least one protected game-library folder before it can delete anything.`n`nConfig file:`n$ProtectedFoldersConfigFile`n`nWhat to do:`nOpen DeskPurge_ProtectedFolders.txt and add your actual game library root, such as D:\Games.`n`nTechnical detail:`n$($_.Exception.Message)`n`nNo deletion was attempted." -Title "Setup Needed" -Type "Error"
-    }
-
-    # 3. Traverse upwards to find the true game installation folder to delete
-    Write-Host "DEBUG: Initial folder candidate: $initialFolderCandidate"
-    $folderToDelete = Resolve-DeskPurgeDeletionTarget -InitialFolder $initialFolderCandidate -SystemProtectedPaths $systemProtectedPaths -UserProtectedFolders $userProtectedGameFolders
-    Write-Host "DEBUG: Final folder determined for deletion: $folderToDelete"
-
-    # 4. Final Safety Checks on the *determined* $folderToDelete
-    $normalizedFolderToDelete = ConvertTo-DeskPurgeNormalizedPath -Path $folderToDelete
-    if (Test-DeskPurgeRootDrive -Path $normalizedFolderToDelete) { Show-Popup -Message "DeskPurge selected a root drive as the deletion target, so it stopped immediately.`n`nBlocked target:`n$folderToDelete`n`nNo deletion was attempted." -Title "Deletion Blocked" -Type "Error" }
-    if ($systemProtectedPaths -contains $normalizedFolderToDelete) { Show-Popup -Message "DeskPurge selected a protected system folder as the deletion target, so it stopped immediately.`n`nBlocked target:`n$folderToDelete`n`nNo deletion was attempted." -Title "Deletion Blocked" -Type "Error" }
-    if ($userProtectedGameFolders -contains $normalizedFolderToDelete) { Show-Popup -Message "DeskPurge selected one of your protected game-library folders as the deletion target, so it stopped immediately.`n`nBlocked target:`n$folderToDelete`n`nNo deletion was attempted." -Title "Deletion Blocked" -Type "Error" }
-    if (-not (Test-Path -LiteralPath $folderToDelete -PathType Container)) { Show-Popup -Message "DeskPurge could not verify the final folder to delete.`n`nTarget:`n$folderToDelete`n`nNo deletion was attempted." -Title "Invalid Delete Target" -Type "Error" }
-
-    # --- Calculate Folder Size for Confirmation ---
-    $folderSizeDisplay = Get-DeskPurgeFolderSizeDisplay -Path $folderToDelete
-
-    # 5. Confirmation
-    $protectedBoundary = Split-Path -Path $folderToDelete -Parent
-    $userResponse = Show-DeleteConfirmation -FolderToDelete $folderToDelete -FolderSizeDisplay $folderSizeDisplay -ShortcutPath $finalLinkPath -TargetPath $targetPath -ProtectedBoundary $protectedBoundary
-    if ($userResponse -ne [System.Windows.Forms.DialogResult]::Yes) { Write-Host "DEBUG: User cancelled. Exiting."; exit 0 }
-
-    # --- NEW: Check if the target executable is running ---
-    if ($targetExeName) {
-        Write-Host "DEBUG: Checking if process '$targetExeName' is running..."
-        # Remove .exe for Get-Process Name parameter if it exists
-        $processNameToFind = $targetExeName.Replace(".exe", "")
-        try {
-            $runningProcesses = Get-Process -Name $processNameToFind -ErrorAction SilentlyContinue # SilentlyContinue to handle "not found"
-            if ($runningProcesses) {
-                # Further check if any of the found processes match the full $targetPath
-                $gameProcessIsRunning = $false
-                foreach ($proc in $runningProcesses) {
-                    if ($proc.Path -eq $targetPath) {
-                        $gameProcessIsRunning = $true
-                        break
-                    }
-                }
-                if ($gameProcessIsRunning) {
-                    Show-Popup -Message "DeskPurge found the target app running from the folder it was about to delete.`n`nRunning app:`n$targetExeName`n`nPath:`n$targetPath`n`nClose the app and run DeskPurge again. No deletion was attempted." -Title "Application In Use" -Type "Error"
-                    # This 'Error' type popup will cause the script to exit due to exit 1
+    function Update-DeskPurgeBatchSelectionSummary {
+        $selectedCount = 0
+        $readyCount = 0
+        foreach ($row in $grid.Rows) {
+            if ($row.Tag.Status -eq 'Ready') {
+                $readyCount++
+                if ([bool]$row.Cells['Selected'].Value) {
+                    $selectedCount++
                 }
             }
-        } catch {
-            # Catch potential errors from Get-Process itself, though ErrorAction SilentlyContinue should prevent most
-            Write-Warning "An error occurred while checking for running processes: $($_.Exception.Message)"
         }
-        Write-Host "DEBUG: Process check complete. '$targetExeName' not found running from the target path."
-    }
-    # --- END NEW PROCESS CHECK ---
 
-    # 6. Perform Deletion (Folder first, then shortcut)
-    $logEntries = New-Object System.Collections.Generic.List[string]
-    $folderDeletedSuccessfully = $false
-    $shortcutDeletedSuccessfully = $false
-    $shortcutDeletionError = $null
+        $summaryLabel.Text = "$selectedCount ready shortcut(s) selected, $readyCount ready, $($Plans.Count) total"
+        $deleteButton.Enabled = $selectedCount -gt 0
+    }
+
+    $grid.Add_CurrentCellDirtyStateChanged({
+        if ($grid.IsCurrentCellDirty) {
+            $grid.CommitEdit([System.Windows.Forms.DataGridViewDataErrorContexts]::Commit) | Out-Null
+        }
+    })
+    $grid.Add_CellValueChanged({ Update-DeskPurgeBatchSelectionSummary })
+
+    $cancelButton.Add_Click({
+        $form.Tag = [pscustomobject]@{ Action = 'Cancel'; Selected = @() }
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+        $form.Close()
+    })
+
+    $deleteButton.Add_Click({
+        $selectedPlans = [System.Collections.Generic.List[object]]::new()
+        foreach ($row in $grid.Rows) {
+            if ($row.Tag.Status -eq 'Ready' -and [bool]$row.Cells['Selected'].Value) {
+                $selectedPlans.Add($row.Tag)
+            }
+        }
+        $form.Tag = [pscustomobject]@{ Action = 'Delete'; Selected = [object[]]$selectedPlans.ToArray() }
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+        $form.Close()
+    })
+
+    if ($null -ne $restartButton) {
+        $restartButton.Add_Click({
+            $form.Tag = [pscustomobject]@{ Action = 'Elevate'; Selected = @() }
+            $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+            $form.Close()
+        })
+    }
+
+    $form.Tag = [pscustomobject]@{ Action = 'Cancel'; Selected = @() }
+    Update-DeskPurgeBatchSelectionSummary
 
     try {
-        Write-Host "DEBUG: Attempting to delete folder: $folderToDelete"
-        Remove-Item -LiteralPath $folderToDelete -Recurse -Force
-        $logEntries.Add("Deleted folder: $folderToDelete (Size: $folderSizeDisplay)")
-        $folderDeletedSuccessfully = $true
-        Write-Host "DEBUG: Folder deleted successfully."
+        $form.ShowDialog() | Out-Null
+        return $form.Tag
     }
-    catch [System.IO.IOException] { # Catch specific IO errors, often due to locked files
-        $errorMessage = $_.Exception.Message
-        Write-Host "ERROR deleting folder (IO Exception): $errorMessage"
-        $customMessage = "DeskPurge could not delete the folder because Windows reported that one or more files may be in use.`n`nFolder:`n$folderToDelete`n`nClose the game, launcher, mod manager, or any related tools, then try again.`n`nTechnical detail:`n$errorMessage`n`nThe shortcut was not deleted."
-        Show-Popup -Message $customMessage -Title "Folder Still In Use" -Type "Error" 
-        # This 'Error' type popup will cause the script to exit
+    finally {
+        $form.Dispose()
     }
-    catch { # Catch any other errors during folder deletion
-        $errorMessage = $_.Exception.Message
-        Write-Host "ERROR deleting folder (General Exception): $errorMessage"
-        Show-Popup -Message "DeskPurge could not delete the folder.`n`nFolder:`n$folderToDelete`n`nTechnical detail:`n$errorMessage`n`nThe shortcut was not deleted." -Title "Folder Delete Failed" -Type "Error"
-        # This 'Error' type popup will cause the script to exit
+}
+
+function ConvertTo-DeskPurgePowerShellSingleQuotedLiteral {
+    param([AllowNull()][string]$Value)
+
+    if ($null -eq $Value) {
+        return "''"
     }
 
-    # Only delete shortcut if folder deletion was successful
-    if ($folderDeletedSuccessfully) {
+    return "'" + $Value.Replace("'", "''") + "'"
+}
+
+function Start-DeskPurgeBatchElevated {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    $scriptLiteral = ConvertTo-DeskPurgePowerShellSingleQuotedLiteral -Value $PSCommandPath
+    $pathLiterals = @($Paths | ForEach-Object { ConvertTo-DeskPurgePowerShellSingleQuotedLiteral -Value $_ })
+    $command = "& $scriptLiteral -NoQueue $($pathLiterals -join ' ')"
+    $encodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+
+    Start-Process `
+        -FilePath 'powershell.exe' `
+        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encodedCommand) `
+        -Verb RunAs `
+        -ErrorAction Stop
+}
+
+function Invoke-DeskPurgeBatchDeletion {
+    param([Parameter(Mandatory = $true)][object[]]$Plans)
+
+    $results = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($plan in $Plans) {
+        $result = [ordered]@{
+            ShortcutName = $plan.ShortcutName
+            ShortcutPath = $plan.ShortcutPath
+            FolderToDelete = $plan.FolderToDelete
+            FolderSizeDisplay = $plan.FolderSizeDisplay
+            Status = 'Pending'
+            Message = ''
+        }
+
         try {
-            Write-Host "DEBUG: Attempting to delete shortcut: $finalLinkPath"
-            Remove-Item -LiteralPath $finalLinkPath -Force
-            $logEntries.Add("Deleted shortcut: $finalLinkPath")
-            $shortcutDeletedSuccessfully = $true
-            Write-Host "DEBUG: Shortcut deleted successfully."
+            if (Test-DeskPurgeTargetProcessRunning -TargetPath $plan.TargetPath) {
+                throw "Target app is running."
+            }
+
+            if (-not (Test-Path -LiteralPath $plan.FolderToDelete -PathType Container)) {
+                throw "Folder no longer exists."
+            }
+
+            Remove-Item -LiteralPath $plan.FolderToDelete -Recurse -Force -ErrorAction Stop
+
+            try {
+                Remove-Item -LiteralPath $plan.ShortcutPath -Force -ErrorAction Stop
+                $result.Status = 'Deleted'
+                $result.Message = 'Folder and shortcut removed.'
+            }
+            catch {
+                $result.Status = 'Shortcut failed'
+                $result.Message = "Folder removed, but shortcut could not be removed: $($_.Exception.Message)"
+            }
         }
         catch {
-            $shortcutDeletionError = $_.Exception.Message
-            $errorMessage = "Failed to delete shortcut '$finalLinkPath' (folder was already deleted): $shortcutDeletionError"
-            $logEntries.Add("WARNING: $errorMessage") # Log as warning as main task (folder) succeeded
+            $result.Status = 'Failed'
+            $result.Message = $_.Exception.Message
         }
-    } else {
-        # This block should not be reached if the catches above for folder deletion use "Error" type popups which exit.
-        # However, as a safeguard:
-        Write-Host "INFO: Folder was not deleted, so shortcut will not be deleted either."
-        $logEntries.Add("INFO: Folder deletion failed or was aborted. Shortcut '$finalLinkPath' was not deleted.")
+
+        $results.Add([pscustomobject]$result)
     }
-    
 
-    # 7. Log
-    $logFile   = Join-Path $PSScriptRoot "DeskPurge_Log.txt"
-    $timestamp = Get-Date -Format 'yyyy-MM-dd hh:mm tt'
-    # Only log if some action was attempted (i.e., user confirmed Yes)
-    if ($logEntries.Count -gt 0) {
-        $newBlock  = @(
-        "[$timestamp]"
-        $logEntries
-        "---"
-        )
-        if (Test-Path $logFile) {
-            $oldLines = Get-Content $logFile -Encoding UTF8
-            $newBlock | Out-File -FilePath $logFile -Encoding UTF8
-            $oldLines | Out-File -FilePath $logFile -Encoding UTF8 -Append
-        } else {
-            $newBlock | Out-File -FilePath $logFile -Encoding UTF8
-        }
-        if ($folderDeletedSuccessfully) {
-            Show-CompletionSummary -FolderToDelete $folderToDelete -FolderSizeDisplay $folderSizeDisplay -ShortcutPath $finalLinkPath -LogFile $logFile -ShortcutDeletedSuccessfully $shortcutDeletedSuccessfully -ShortcutDeletionError $shortcutDeletionError
-        }
-    } # Else, if user cancelled before any action, no log/completion message needed beyond exiting.
-
+    return [object[]]$results.ToArray()
 }
-catch { # Catch-all for any other unhandled script errors
-    Show-Popup -Message "DeskPurge hit an unexpected script error before it could finish cleanly.`n`nTechnical detail:`n$($_.Exception.ToString())" -Title "Unexpected Error" -Type "Error"
+
+function Write-DeskPurgeBatchLog {
+    param([Parameter(Mandatory = $true)][object[]]$Results)
+
+    $logFile = Join-Path $PSScriptRoot "DeskPurge_Log.txt"
+    $timestamp = Get-Date -Format 'yyyy-MM-dd hh:mm tt'
+    $logEntries = [System.Collections.Generic.List[string]]::new()
+    $logEntries.Add("DeskPurge uninstall:")
+
+    foreach ($result in $Results) {
+        $logEntries.Add("$($result.Status): $($result.ShortcutPath) -> $($result.FolderToDelete) ($($result.FolderSizeDisplay))")
+        if (-not [string]::IsNullOrWhiteSpace($result.Message)) {
+            $logEntries.Add("  $($result.Message)")
+        }
+    }
+
+    $newBlock = @("[$timestamp]") + [string[]]$logEntries.ToArray() + @("---")
+
+    if (Test-Path -LiteralPath $logFile -PathType Leaf) {
+        $oldLines = Get-Content -LiteralPath $logFile -Encoding UTF8
+        $newBlock | Out-File -FilePath $logFile -Encoding UTF8
+        $oldLines | Out-File -FilePath $logFile -Encoding UTF8 -Append
+    }
+    else {
+        $newBlock | Out-File -FilePath $logFile -Encoding UTF8
+    }
+
+    return $logFile
+}
+
+function Show-DeskPurgeBatchCompletion {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Results,
+        [Parameter(Mandatory = $true)][string]$LogFile
+    )
+
+    $base = New-DeskPurgeBatchBaseForm -Title 'DeskPurge Complete' -Width 1040 -Height 650
+    $form = $base.Form
+    $rootPanel = $base.Root
+    $palette = $base.Palette
+    $contentX = 32
+    $contentWidth = 974
+    $deletedCount = @($Results | Where-Object { $_.Status -eq 'Deleted' }).Count
+    $warningCount = @($Results | Where-Object { $_.Status -eq 'Shortcut failed' }).Count
+    $failedCount = @($Results | Where-Object { $_.Status -eq 'Failed' }).Count
+    $isSingleResult = $Results.Count -eq 1
+
+    $badgeLabel = [System.Windows.Forms.Label]::new()
+    $badgeLabel.Location = [System.Drawing.Point]::new($contentX, 66)
+    $badgeLabel.Size = [System.Drawing.Size]::new(96, 26)
+    $badgeLabel.Text = 'DONE'
+    $badgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $badgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+    $badgeLabel.BackColor = [System.Drawing.Color]::FromArgb(5, 46, 22)
+    $badgeLabel.ForeColor = $palette.Success
+    $rootPanel.Controls.Add($badgeLabel)
+
+    $headingLabel = [System.Windows.Forms.Label]::new()
+    $headingLabel.Location = [System.Drawing.Point]::new($contentX, 104)
+    $headingLabel.Size = [System.Drawing.Size]::new($contentWidth, 34)
+    $headingLabel.Text = 'Uninstall complete'
+    $headingLabel.Font = [System.Drawing.Font]::new('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
+    $headingLabel.ForeColor = $palette.Text
+    $rootPanel.Controls.Add($headingLabel)
+
+    $messageLabel = [System.Windows.Forms.Label]::new()
+    $messageLabel.Location = [System.Drawing.Point]::new($contentX, 144)
+    $messageLabel.Size = [System.Drawing.Size]::new($contentWidth, 42)
+    $messageLabel.Text = if ($isSingleResult) {
+        "$($Results[0].Status): $($Results[0].Message) Log: $LogFile"
+    }
+    else {
+        "$deletedCount deleted, $warningCount shortcut warning(s), $failedCount failed. Log: $LogFile"
+    }
+    $messageLabel.Font = [System.Drawing.Font]::new('Segoe UI', 9)
+    $messageLabel.ForeColor = $palette.BodyText
+    $messageLabel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($messageLabel)
+
+    $grid = [System.Windows.Forms.DataGridView]::new()
+    $grid.Location = [System.Drawing.Point]::new($contentX, 196)
+    $grid.Size = [System.Drawing.Size]::new($contentWidth, 340)
+    $grid.ReadOnly = $true
+    Set-DeskPurgeBatchGridStyle -Grid $grid
+    $rootPanel.Controls.Add($grid)
+
+    foreach ($column in @(
+        @{ Name = 'Status'; Text = 'Status'; Width = 120 },
+        @{ Name = 'Shortcut'; Text = 'Shortcut'; Width = 200 },
+        @{ Name = 'Freed'; Text = 'Freed'; Width = 90 },
+        @{ Name = 'Message'; Text = 'Message'; Width = 300 },
+        @{ Name = 'Folder'; Text = 'Folder'; Width = 240 }
+    )) {
+        $textColumn = [System.Windows.Forms.DataGridViewTextBoxColumn]::new()
+        $textColumn.Name = $column.Name
+        $textColumn.HeaderText = $column.Text
+        $textColumn.Width = $column.Width
+        $textColumn.ReadOnly = $true
+        $grid.Columns.Add($textColumn) | Out-Null
+    }
+
+    foreach ($result in $Results) {
+        $rowIndex = $grid.Rows.Add(
+            $result.Status,
+            $result.ShortcutName,
+            $result.FolderSizeDisplay,
+            $result.Message,
+            $result.FolderToDelete
+        )
+        $row = $grid.Rows[$rowIndex]
+        switch ($result.Status) {
+            'Deleted' { $row.Cells['Status'].Style.ForeColor = $palette.Success }
+            'Shortcut failed' { $row.Cells['Status'].Style.ForeColor = $palette.Warning }
+            default { $row.Cells['Status'].Style.ForeColor = $palette.Danger }
+        }
+    }
+
+    $divider = [System.Windows.Forms.Panel]::new()
+    $divider.Location = [System.Drawing.Point]::new($contentX, 564)
+    $divider.Size = [System.Drawing.Size]::new($contentWidth, 1)
+    $divider.BackColor = $palette.Divider
+    $rootPanel.Controls.Add($divider)
+
+    $buttonPanel = [System.Windows.Forms.FlowLayoutPanel]::new()
+    $buttonPanel.Location = [System.Drawing.Point]::new($contentX, 586)
+    $buttonPanel.Size = [System.Drawing.Size]::new($contentWidth, 40)
+    $buttonPanel.FlowDirection = [System.Windows.Forms.FlowDirection]::RightToLeft
+    $buttonPanel.WrapContents = $false
+    $buttonPanel.BackColor = $palette.Surface
+    $rootPanel.Controls.Add($buttonPanel)
+
+    $doneButton = [System.Windows.Forms.Button]::new()
+    $doneButton.Text = 'Done'
+    Set-DeskPurgeBatchButtonStyle -Button $doneButton -Variant 'Primary'
+    $doneButton.Add_Click({
+        $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+        $form.Close()
+    })
+    $buttonPanel.Controls.Add($doneButton)
+    $form.AcceptButton = $doneButton
+
+    if ($isSingleResult -and -not [string]::IsNullOrWhiteSpace($Results[0].FolderToDelete)) {
+        $containingFolder = Split-Path -Path $Results[0].FolderToDelete -Parent
+        if (Test-Path -LiteralPath $containingFolder -PathType Container) {
+            $openContainingButton = [System.Windows.Forms.Button]::new()
+            $openContainingButton.Text = 'Open Containing Folder'
+            $openContainingButton.Width = 184
+            Set-DeskPurgeBatchButtonStyle -Button $openContainingButton -Variant 'Quiet'
+            $openContainingButton.Add_Click({
+                try {
+                    $form.TopMost = $false
+                    Open-DeskPurgeBatchFolder -Path $containingFolder
+                }
+                catch {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Could not open the folder.`n`n$($_.Exception.Message)",
+                        "Open Folder Failed",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Warning
+                    ) | Out-Null
+                }
+            })
+            $buttonPanel.Controls.Add($openContainingButton)
+        }
+    }
+
+    try {
+        $form.ShowDialog() | Out-Null
+    }
+    finally {
+        $form.Dispose()
+    }
+}
+
+try {
+    $ShortcutPaths = Get-DeskPurgeUniqueShortcutPaths -Paths $ShortcutPaths
+
+    if (-not $NoQueue) {
+        if ($ShortcutPaths.Count -eq 0) {
+            Show-DeskPurgeBatchMessage `
+                -Title 'Usage Error' `
+                -Heading 'No shortcuts were provided' `
+                -Message 'DeskPurge is intended for shortcut context-menu use.' `
+                -Type 'Error'
+            exit 1
+        }
+
+        $queueResult = Add-DeskPurgeBatchQueue -Paths $ShortcutPaths
+        if (-not $queueResult.ShouldOpen) {
+            exit 0
+        }
+
+        Start-Sleep -Milliseconds 1200
+        $ShortcutPaths = Read-DeskPurgeBatchQueue -State $queueResult.State
+    }
+
+    $ShortcutPaths = Get-DeskPurgeUniqueShortcutPaths -Paths $ShortcutPaths
+    if ($ShortcutPaths.Count -eq 0) {
+        Show-DeskPurgeBatchMessage `
+            -Title 'Usage Error' `
+            -Heading 'No shortcuts were provided' `
+            -Message 'DeskPurge did not receive any shortcut paths to review.' `
+            -Type 'Error'
+        exit 1
+    }
+
+    $plans = @(Resolve-DeskPurgeBatchPlans -Paths $ShortcutPaths)
+    if ($plans.Count -eq 0) {
+        Show-DeskPurgeBatchMessage `
+            -Title 'No Shortcuts Found' `
+            -Heading 'Nothing to review' `
+            -Message 'DeskPurge did not find any shortcut paths in this batch.' `
+            -Type 'Warning'
+        exit 0
+    }
+
+    $reviewResult = if ($plans.Count -eq 1) {
+        Show-DeskPurgeSingleReview -Plan $plans[0]
+    }
+    else {
+        Show-DeskPurgeBatchReview -Plans $plans
+    }
+    if ($reviewResult.Action -eq 'Elevate') {
+        Start-DeskPurgeBatchElevated -Paths $ShortcutPaths
+        exit 0
+    }
+    if ($reviewResult.Action -ne 'Delete' -or $reviewResult.Selected.Count -eq 0) {
+        exit 0
+    }
+
+    $deleteResults = Invoke-DeskPurgeBatchDeletion -Plans $reviewResult.Selected
+    $logFile = Write-DeskPurgeBatchLog -Results $deleteResults
+    Show-DeskPurgeBatchCompletion -Results $deleteResults -LogFile $logFile
+}
+catch {
+    Show-DeskPurgeBatchMessage `
+        -Title 'Unexpected Error' `
+        -Heading 'Uninstall could not continue' `
+        -Message "DeskPurge hit an unexpected script error before it could finish cleanly.`n`nTechnical detail:`n$($_.Exception.ToString())" `
+        -Type 'Error'
+    exit 1
 }

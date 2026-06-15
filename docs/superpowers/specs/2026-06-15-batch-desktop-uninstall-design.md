@@ -6,25 +6,24 @@ DeskPurge should support the user's current batch workflow:
 
 1. Select multiple desktop shortcuts.
 2. Shift-right-click the final selected shortcut.
-3. Choose a DeskPurge uninstall action.
-4. Review all selected shortcuts in one DeskPurge window.
+3. Choose `DeskPurge - Uninstall`.
+4. Review the selected shortcut or shortcuts in one DeskPurge window.
 5. Confirm once.
 6. Receive one completion summary.
 
-The primary success criterion is that selecting ten shortcuts opens one batch review window, not ten independent confirmation dialogs.
+The primary success criterion is that selecting ten shortcuts opens one batch review window, not ten independent confirmation dialogs. Selecting one shortcut should use the same entrypoint but show a focused single-item review.
 
 ## Non-Goals
 
-- Do not replace the existing single-shortcut uninstall flow.
 - Do not add launcher registry cleanup, Windows app uninstall integration, or Revo-style trace cleanup.
 - Do not delete folders without the existing protected-folder boundary checks.
 - Do not introduce a compiled application dependency for the first batch version.
 
 ## Recommended Approach
 
-Add a batch-aware PowerShell entrypoint named `DeskPurge.Batch.ps1`, and install a separate context-menu verb named `DeskPurge - Batch Uninstall`.
+Add a batch-aware PowerShell entrypoint named `DeskPurge.ps1`, and install it as the main context-menu verb named `DeskPurge - Uninstall`.
 
-The batch entrypoint should accept all selected shortcut paths, resolve each shortcut, compute its proposed install folder using the same core safety helpers as the single flow, and show one WinForms review surface. The existing `DeskPurge.ps1` remains the simple single-item entrypoint.
+The entrypoint should accept all selected shortcut paths, resolve each shortcut, compute its proposed install folder using the same core safety helpers as the single flow, and show one WinForms review surface. The old single-shortcut implementation can remain under `legacy/` for reference, but the installer should not expose it as a context-menu item.
 
 If Windows Explorer does not reliably pass all selected `.lnk` paths to the context-menu command on a target Windows version, the implementation should stop and report that limitation instead of building a brittle workaround. A fallback design can add a drag-and-drop or "Scan Desktop" batch window.
 
@@ -37,7 +36,9 @@ The batch UI must match the current single-version DeskPurge style:
 - Same caution-first tone.
 - No marketing or instructional landing screen.
 
-The batch review window should show a table with one row per shortcut:
+When one shortcut is selected, the review window should use a focused details layout without a checkbox selector. It should include `Open Folder` before deletion.
+
+When multiple shortcuts are selected, the batch review window should show a table with one row per shortcut:
 
 - Shortcut name.
 - Shortcut path.
@@ -45,7 +46,7 @@ The batch review window should show a table with one row per shortcut:
 - Proposed folder to delete.
 - Estimated size.
 - Boundary folder.
-- Status.
+- Status, including the blocking reason when the row is not ready.
 - Selected checkbox.
 
 Expected statuses:
@@ -61,10 +62,15 @@ Rows that are not `Ready` should default to unchecked. The user can only confirm
 
 ## Data Flow
 
-1. Explorer invokes the batch context-menu command with the selected `.lnk` paths.
-2. `DeskPurge.Batch.ps1` normalizes and deduplicates the paths.
+1. Explorer invokes the DeskPurge context-menu command with the selected `.lnk` paths.
+2. `DeskPurge.ps1` normalizes and deduplicates the paths.
 3. It loads `DeskPurge.Core.ps1` and `DeskPurge_ProtectedFolders.txt`.
-4. For each shortcut:
+4. If the protected-folder config is missing or empty:
+   - Resolve selected shortcut targets.
+   - Suggest protected folder candidates from known library patterns, Steam `steamapps\common`, non-system top-level install folders, and common existing library folders on mounted drives.
+   - Show a setup review window and require the user to confirm which boundaries to save.
+   - Stop without deleting anything if the user cancels or no safe candidates can be detected.
+5. For each shortcut:
    - Validate that it is a `.lnk` file.
    - Resolve the target with `WScript.Shell`.
    - Determine the initial target parent folder.
@@ -72,14 +78,16 @@ Rows that are not `Ready` should default to unchecked. The user can only confirm
    - Apply final protected-folder checks.
    - Calculate folder size with `Get-DeskPurgeFolderSizeDisplay`.
    - Detect likely admin-needed shortcut locations, especially `C:\Users\Public\Desktop`.
-5. Render the review window.
-6. On confirmation, process selected ready rows sequentially:
+6. Render the review window:
+   - Single shortcut: focused single-item review.
+   - Multiple shortcuts: table review with ready-row checkboxes.
+7. On confirmation, process selected ready rows sequentially:
    - Recheck target and folder existence.
    - Recheck running process.
    - Delete folder first.
    - Delete shortcut second.
    - Record per-row result.
-7. Show one completion summary and write one log block.
+8. Show one completion summary and write one log block. For single-item completion, include an `Open Containing Folder` action when the parent folder exists.
 
 ## Error Handling
 
@@ -101,16 +109,17 @@ Add or extract pure helpers for batch planning where practical:
 - Shortcut resolution result modeling.
 - Deletion target planning for one shortcut.
 - Status classification.
+- Protected-folder setup candidate detection.
 
-The WinForms UI can live in `DeskPurge.Batch.ps1` initially. If matching the single-version style creates large copy-paste blocks, extract the shared dialog styling helpers into a dedicated GUI helper file as part of the same implementation. Do not extract unrelated behavior.
+The WinForms UI can live in the root `DeskPurge.ps1`. If matching the single-version style creates large copy-paste blocks, extract the shared dialog styling helpers into a dedicated GUI helper file as part of the same implementation. Do not extract unrelated behavior.
 
 ## Installer Changes
 
-Update `Install-ContextMenu.ps1` to install a batch context-menu verb. Keep the current single verb available unless there is a confirmed Explorer limitation that makes two verbs confusing.
+Update `Install-ContextMenu.ps1` to install one adaptive context-menu verb named `DeskPurge - Uninstall`, backed by the root `DeskPurge.ps1`. Remove any older separate `DeskPurge - Batch Uninstall` verb during installation.
 
 The installer must write any needed hidden launcher next to the DeskPurge scripts and preserve the current no-console-flash behavior. The batch verb should set the shell multi-select registry metadata needed for Explorer to invoke the command once for a multi-selection rather than once per selected shortcut.
 
-Update `Uninstall-ContextMenu.ps1` to remove both single and batch DeskPurge verbs and any generated hidden launchers.
+Update `Uninstall-ContextMenu.ps1` to remove the current DeskPurge verb, any older separate batch verb, and any generated hidden launchers.
 
 ## Testing
 
@@ -126,7 +135,7 @@ Manual verification is required for Explorer integration:
 1. Create or use ten desktop `.lnk` shortcuts pointing into safe test game folders under a configured protected root.
 2. Select all ten.
 3. Shift-right-click the final selected shortcut.
-4. Choose `DeskPurge - Batch Uninstall`.
+4. Choose `DeskPurge - Uninstall`.
 5. Verify one review window opens.
 6. Confirm selected ready rows.
 7. Verify one completion summary appears.

@@ -1,7 +1,8 @@
-﻿param(
+param(
     [string]$ScriptPath = (Join-Path $PSScriptRoot "DeskPurge.ps1"),
     [string]$VerbKeyName = "DeskPurge",
-    [string]$VerbName = "DeskPurge - Uninstall"
+    [string]$VerbName = "DeskPurge - Uninstall",
+    [string]$LegacyBatchVerbKeyName = "DeskPurgeBatch"
 )
 
 if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
@@ -38,29 +39,25 @@ function Remove-LegacyDeskPurgeUninstallVerb {
     }
 }
 
-Remove-LegacyDeskPurgeUninstallVerb -CurrentScriptPath $ScriptPath
+function New-DeskPurgeHiddenLauncher {
+    param(
+        [Parameter(Mandatory = $true)][string]$LauncherPath,
+        [Parameter(Mandatory = $true)][string]$TargetScriptPath
+    )
 
-$scriptDirectory = Split-Path -Path $ScriptPath -Parent
-$launcherPath = Join-Path -Path $scriptDirectory -ChildPath "DeskPurge.Hidden.vbs"
-$escapedScriptPath = $ScriptPath.Replace('"', '""')
-$launcherContent = @"
+    $escapedScriptPath = $TargetScriptPath.Replace('"', '""')
+    $launcherContent = @"
 Option Explicit
 
-Dim shell, scriptPath, linkPath, command
+Dim shell, scriptPath, command, index
 Set shell = CreateObject("WScript.Shell")
 
 scriptPath = "$escapedScriptPath"
-linkPath = ""
-
-If WScript.Arguments.Count > 0 Then
-    linkPath = WScript.Arguments(0)
-End If
-
 command = "powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File " & Quote(scriptPath)
 
-If Len(linkPath) > 0 Then
-    command = command & " " & Quote(linkPath)
-End If
+For index = 0 To WScript.Arguments.Count - 1
+    command = command & " " & Quote(WScript.Arguments(index))
+Next
 
 shell.Run command, 0, False
 
@@ -69,19 +66,53 @@ Function Quote(value)
 End Function
 "@
 
-Set-Content -LiteralPath $launcherPath -Value $launcherContent -Encoding ASCII
+    Set-Content -LiteralPath $LauncherPath -Value $launcherContent -Encoding ASCII
+}
 
-$verbKey = "HKCU:\Software\Classes\lnkfile\shell\$VerbKeyName"
-$cmdKey  = Join-Path $verbKey "command"
+function Install-DeskPurgeContextMenuVerb {
+    param(
+        [Parameter(Mandatory = $true)][string]$VerbKeyName,
+        [Parameter(Mandatory = $true)][string]$VerbName,
+        [Parameter(Mandatory = $true)][string]$Command,
+        [switch]$SupportsMultiSelect
+    )
 
-New-Item -Path $verbKey -Force | Out-Null
-New-ItemProperty -Path $verbKey -Name "(default)" -Value $VerbName -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $verbKey -Name "Extended" -Value "" -PropertyType String -Force | Out-Null  # Shift+Right-Click only
-New-ItemProperty -Path $verbKey -Name "Icon" -Value "wscript.exe" -PropertyType String -Force | Out-Null
+    $verbKey = "HKCU:\Software\Classes\lnkfile\shell\$VerbKeyName"
+    $cmdKey = Join-Path $verbKey "command"
 
-New-Item -Path $cmdKey -Force | Out-Null
-$cmd = "wscript.exe //nologo `"$launcherPath`" `"%1`""
-New-ItemProperty -Path $cmdKey -Name "(default)" -Value $cmd -PropertyType String -Force | Out-Null
+    New-Item -Path $verbKey -Force | Out-Null
+    New-ItemProperty -Path $verbKey -Name "(default)" -Value $VerbName -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $verbKey -Name "Extended" -Value "" -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $verbKey -Name "Icon" -Value "wscript.exe" -PropertyType String -Force | Out-Null
+    if ($SupportsMultiSelect) {
+        New-ItemProperty -Path $verbKey -Name "MultiSelectModel" -Value "Player" -PropertyType String -Force | Out-Null
+    }
+
+    New-Item -Path $cmdKey -Force | Out-Null
+    New-ItemProperty -Path $cmdKey -Name "(default)" -Value $Command -PropertyType String -Force | Out-Null
+}
+
+Remove-LegacyDeskPurgeUninstallVerb -CurrentScriptPath $ScriptPath
+
+$scriptDirectory = Split-Path -Path $ScriptPath -Parent
+$launcherPath = Join-Path -Path $scriptDirectory -ChildPath "DeskPurge.Hidden.vbs"
+$legacyBatchLauncherPath = Join-Path -Path $scriptDirectory -ChildPath "DeskPurge.Batch.Hidden.vbs"
+
+New-DeskPurgeHiddenLauncher -LauncherPath $launcherPath -TargetScriptPath $ScriptPath
+
+$command = "wscript.exe //nologo `"$launcherPath`" `"%1`" %*"
+
+Install-DeskPurgeContextMenuVerb -VerbKeyName $VerbKeyName -VerbName $VerbName -Command $command -SupportsMultiSelect
+
+$legacyBatchVerbKey = "HKCU:\Software\Classes\lnkfile\shell\$LegacyBatchVerbKeyName"
+if (Test-Path -LiteralPath $legacyBatchVerbKey) {
+    Remove-Item -LiteralPath $legacyBatchVerbKey -Recurse -Force
+    Write-Host "Removed old separate batch context menu key: $legacyBatchVerbKey"
+}
+if (Test-Path -LiteralPath $legacyBatchLauncherPath -PathType Leaf) {
+    Remove-Item -LiteralPath $legacyBatchLauncherPath -Force
+    Write-Host "Removed old batch hidden launcher: $legacyBatchLauncherPath"
+}
 
 Write-Host "DeskPurge context menu installed for .lnk (Shift+Right-Click)."
-Write-Host "Hidden launcher written to: $launcherPath"
+Write-Host "Launcher written to: $launcherPath"

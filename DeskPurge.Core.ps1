@@ -71,6 +71,386 @@ function Get-ProtectedGameFolders {
     return [string[]]$loadedProtectedFolders
 }
 
+function New-DeskPurgeProtectedFolderCandidate {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Source
+    )
+
+    return [pscustomobject]@{
+        Path = $Path.Trim().TrimEnd('\').TrimEnd('/')
+        Source = $Source
+    }
+}
+
+function Add-DeskPurgeProtectedFolderCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.Dictionary[string, object]]$CandidatesByPath,
+
+        [AllowNull()][string]$Path,
+
+        [Parameter(Mandatory = $true)][string]$Source
+    )
+
+    $normalizedPath = ConvertTo-DeskPurgeNormalizedPath -Path $Path
+    if (-not $normalizedPath) {
+        return
+    }
+
+    if (Test-DeskPurgeRootDrive -Path $normalizedPath) {
+        return
+    }
+
+    if (-not $CandidatesByPath.ContainsKey($normalizedPath)) {
+        $CandidatesByPath[$normalizedPath] = New-DeskPurgeProtectedFolderCandidate -Path $Path -Source $Source
+        return
+    }
+
+    $existing = $CandidatesByPath[$normalizedPath]
+    if ($existing.Source -notlike "*$Source*") {
+        $existing.Source = "$($existing.Source); $Source"
+    }
+}
+
+function Join-DeskPurgePathSegments {
+    param(
+        [Parameter(Mandatory = $true)][string]$Drive,
+        [Parameter(Mandatory = $true)][string[]]$Segments,
+        [Parameter(Mandatory = $true)][int]$LastIndex
+    )
+
+    if ($LastIndex -lt 0 -or $Segments.Count -eq 0) {
+        return $null
+    }
+
+    return "$Drive\" + (($Segments[0..$LastIndex]) -join '\')
+}
+
+function Get-DeskPurgeProtectedFolderCandidatesFromTargetPath {
+    param([AllowNull()][string]$TargetPath)
+
+    $candidatesByPath = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    if ([string]::IsNullOrWhiteSpace($TargetPath)) {
+        return @()
+    }
+
+    $trimmedPath = $TargetPath.Trim().TrimEnd('\').TrimEnd('/')
+    if ($trimmedPath -notmatch '^([a-zA-Z]:)\\(.+)$') {
+        return @()
+    }
+
+    $drive = $matches[1]
+    $segments = @($matches[2] -split '\\' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($segments.Count -lt 2) {
+        return @()
+    }
+
+    for ($index = 0; $index -lt ($segments.Count - 1); $index++) {
+        if ($segments[$index].Equals('steamapps', [System.StringComparison]::OrdinalIgnoreCase) -and
+            $segments[$index + 1].Equals('common', [System.StringComparison]::OrdinalIgnoreCase)) {
+            Add-DeskPurgeProtectedFolderCandidate `
+                -CandidatesByPath $candidatesByPath `
+                -Path (Join-DeskPurgePathSegments -Drive $drive -Segments $segments -LastIndex ($index + 1)) `
+                -Source 'Steam library from selected shortcut'
+        }
+    }
+
+    $knownSingleFolderLibraries = @(
+        'Games',
+        'Games2',
+        '~Games~',
+        'EpicGames',
+        'Epic Games',
+        'GOG Games',
+        'Origin Games',
+        'XboxGames',
+        'WindowsApps'
+    )
+
+    for ($index = 0; $index -lt ($segments.Count - 1); $index++) {
+        if ($knownSingleFolderLibraries -contains $segments[$index]) {
+            Add-DeskPurgeProtectedFolderCandidate `
+                -CandidatesByPath $candidatesByPath `
+                -Path (Join-DeskPurgePathSegments -Drive $drive -Segments $segments -LastIndex $index) `
+                -Source 'Known game-library folder from selected shortcut'
+        }
+
+        if ($segments[$index].Equals('Ubisoft Game Launcher', [System.StringComparison]::OrdinalIgnoreCase) -and
+            $index + 1 -lt $segments.Count -and
+            $segments[$index + 1].Equals('games', [System.StringComparison]::OrdinalIgnoreCase)) {
+            Add-DeskPurgeProtectedFolderCandidate `
+                -CandidatesByPath $candidatesByPath `
+                -Path (Join-DeskPurgePathSegments -Drive $drive -Segments $segments -LastIndex ($index + 1)) `
+                -Source 'Ubisoft library from selected shortcut'
+        }
+    }
+
+    $topLevelCandidate = Join-DeskPurgePathSegments -Drive $drive -Segments $segments -LastIndex 0
+    $normalizedTopLevel = ConvertTo-DeskPurgeNormalizedPath -Path $topLevelCandidate
+    $skipTopLevel = @(
+        'c:\windows',
+        'c:\users',
+        'c:\program files',
+        'c:\program files (x86)'
+    )
+    if ($skipTopLevel -notcontains $normalizedTopLevel) {
+        Add-DeskPurgeProtectedFolderCandidate `
+            -CandidatesByPath $candidatesByPath `
+            -Path $topLevelCandidate `
+            -Source 'Top-level folder from selected shortcut'
+    }
+
+    return @($candidatesByPath.Values)
+}
+
+function Get-DeskPurgeCommonProtectedFolderCandidatePaths {
+    $candidatePaths = [System.Collections.Generic.List[string]]::new()
+    $driveRoots = @()
+
+    try {
+        $driveRoots = @(Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root.TrimEnd('\') })
+    }
+    catch {
+        $driveRoots = @('C:', 'D:', 'E:')
+    }
+
+    foreach ($driveRoot in $driveRoots) {
+        foreach ($relativePath in @(
+            'Games',
+            'Games2',
+            '~Games~',
+            'SteamLibrary\steamapps\common',
+            'Steam\steamapps\common',
+            'EpicGames',
+            'Epic Games',
+            'GOG Games',
+            'Origin Games',
+            'XboxGames'
+        )) {
+            $candidatePath = "$driveRoot\$relativePath"
+            if (Test-Path -LiteralPath $candidatePath -PathType Container) {
+                $candidatePaths.Add($candidatePath)
+            }
+        }
+    }
+
+    return [string[]]$candidatePaths
+}
+
+function Get-DeskPurgeSystemProtectedPaths {
+    $paths = @(
+        'c:\windows',
+        'c:\program files',
+        'c:\program files (x86)',
+        [Environment]::GetFolderPath('UserProfile'),
+        [Environment]::GetFolderPath('CommonDesktopDirectory'),
+        [Environment]::GetFolderPath('Desktop')
+    )
+
+    return [string[]]($paths | ForEach-Object {
+        ConvertTo-DeskPurgeNormalizedPath -Path $_
+    } | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    })
+}
+
+function Get-DeskPurgeUniqueShortcutPaths {
+    param([AllowNull()][string[]]$Paths)
+
+    $seenPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $uniquePaths = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($path in @($Paths)) {
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            continue
+        }
+
+        $trimmedPath = $path.Trim()
+        $normalizedPath = ConvertTo-DeskPurgeNormalizedPath -Path $trimmedPath
+        if (-not $normalizedPath) {
+            continue
+        }
+
+        if ($seenPaths.Add($normalizedPath)) {
+            $uniquePaths.Add($trimmedPath)
+        }
+    }
+
+    return [string[]]$uniquePaths
+}
+
+function Test-DeskPurgeCurrentProcessElevated {
+    try {
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
+        return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-DeskPurgePathUnderFolder {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Folder
+    )
+
+    $normalizedPath = ConvertTo-DeskPurgeNormalizedPath -Path $Path
+    $normalizedFolder = ConvertTo-DeskPurgeNormalizedPath -Path $Folder
+
+    if (-not $normalizedPath -or -not $normalizedFolder) {
+        return $false
+    }
+
+    return ($normalizedPath -eq $normalizedFolder) -or $normalizedPath.StartsWith("$normalizedFolder\")
+}
+
+function Test-DeskPurgeShortcutNeedsElevation {
+    param(
+        [Parameter(Mandatory = $true)][string]$ShortcutPath,
+        [bool]$IsElevated = (Test-DeskPurgeCurrentProcessElevated),
+        [string[]]$AdminShortcutRoots = @([Environment]::GetFolderPath('CommonDesktopDirectory'))
+    )
+
+    if ($IsElevated) {
+        return $false
+    }
+
+    foreach ($root in @($AdminShortcutRoots)) {
+        if ([string]::IsNullOrWhiteSpace($root)) {
+            continue
+        }
+
+        if (Test-DeskPurgePathUnderFolder -Path $ShortcutPath -Folder $root) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-DeskPurgeTargetProcessRunning {
+    param([AllowNull()][string]$TargetPath)
+
+    if ([string]::IsNullOrWhiteSpace($TargetPath)) {
+        return $false
+    }
+
+    $targetExeName = Split-Path -Path $TargetPath -Leaf
+    if ([string]::IsNullOrWhiteSpace($targetExeName)) {
+        return $false
+    }
+
+    $processNameToFind = $targetExeName -replace '\.exe$', ''
+    try {
+        $runningProcesses = Get-Process -Name $processNameToFind -ErrorAction SilentlyContinue
+        foreach ($process in @($runningProcesses)) {
+            try {
+                if ($process.Path -eq $TargetPath) {
+                    return $true
+                }
+            }
+            catch {
+                continue
+            }
+        }
+    }
+    catch {
+        return $false
+    }
+
+    return $false
+}
+
+function New-DeskPurgeShortcutPlan {
+    param(
+        [Parameter(Mandatory = $true)][string]$ShortcutPath,
+        [AllowNull()][string]$TargetPath,
+        [string[]]$SystemProtectedPaths = @(),
+        [string[]]$UserProtectedFolders = @(),
+        [bool]$IsElevated = (Test-DeskPurgeCurrentProcessElevated)
+    )
+
+    $plan = [ordered]@{
+        ShortcutPath = $ShortcutPath
+        ShortcutName = Split-Path -Path $ShortcutPath -Leaf
+        TargetPath = $TargetPath
+        FolderToDelete = $null
+        FolderSizeDisplay = 'N/A'
+        ProtectedBoundary = $null
+        Status = 'Ready'
+        Message = 'Ready'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ShortcutPath) -or -not $ShortcutPath.ToLowerInvariant().EndsWith('.lnk')) {
+        $plan.Status = 'Error'
+        $plan.Message = 'Not a shortcut (.lnk) file.'
+        return [pscustomobject]$plan
+    }
+
+    if (Test-DeskPurgeShortcutNeedsElevation -ShortcutPath $ShortcutPath -IsElevated $IsElevated) {
+        $plan.Status = 'Needs admin'
+        $plan.Message = 'Shortcut is in a shared location that requires admin rights.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($TargetPath)) {
+        $plan.Status = 'Error'
+        $plan.Message = 'Shortcut target is empty.'
+        return [pscustomobject]$plan
+    }
+
+    if (-not (Test-Path -LiteralPath $TargetPath)) {
+        $plan.Status = 'Target missing'
+        $plan.Message = 'Shortcut target no longer exists.'
+        return [pscustomobject]$plan
+    }
+
+    $initialFolderCandidate = Split-Path -Path $TargetPath -Parent
+    if ([string]::IsNullOrWhiteSpace($initialFolderCandidate) -or -not (Test-Path -LiteralPath $initialFolderCandidate -PathType Container)) {
+        $plan.Status = 'Error'
+        $plan.Message = 'Could not determine the target parent folder.'
+        return [pscustomobject]$plan
+    }
+
+    try {
+        $folderToDelete = Resolve-DeskPurgeDeletionTarget `
+            -InitialFolder $initialFolderCandidate `
+            -SystemProtectedPaths $SystemProtectedPaths `
+            -UserProtectedFolders $UserProtectedFolders
+
+        $normalizedFolderToDelete = ConvertTo-DeskPurgeNormalizedPath -Path $folderToDelete
+        if (Test-DeskPurgeRootDrive -Path $normalizedFolderToDelete) {
+            throw "Selected target is a root drive."
+        }
+        if ($SystemProtectedPaths -contains $normalizedFolderToDelete) {
+            throw "Selected target is a protected system folder."
+        }
+        if ($UserProtectedFolders -contains $normalizedFolderToDelete) {
+            throw "Selected target is a protected game-library folder."
+        }
+        if (-not (Test-Path -LiteralPath $folderToDelete -PathType Container)) {
+            throw "Selected target folder could not be verified."
+        }
+
+        $plan.FolderToDelete = $folderToDelete
+        $plan.FolderSizeDisplay = Get-DeskPurgeFolderSizeDisplay -Path $folderToDelete
+        $plan.ProtectedBoundary = Split-Path -Path $folderToDelete -Parent
+
+        if ($plan.Status -eq 'Ready' -and (Test-DeskPurgeTargetProcessRunning -TargetPath $TargetPath)) {
+            $plan.Status = 'Running'
+            $plan.Message = 'Target app appears to be running.'
+        }
+    }
+    catch {
+        $plan.Status = 'Blocked'
+        $plan.Message = $_.Exception.Message
+    }
+
+    return [pscustomobject]$plan
+}
+
 function Resolve-DeskPurgeDeletionTarget {
     param(
         [Parameter(Mandatory = $true)]
