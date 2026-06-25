@@ -370,7 +370,8 @@ function New-DeskPurgeShortcutPlan {
         [AllowNull()][string]$TargetPath,
         [string[]]$SystemProtectedPaths = @(),
         [string[]]$UserProtectedFolders = @(),
-        [bool]$IsElevated = (Test-DeskPurgeCurrentProcessElevated)
+        [bool]$IsElevated = (Test-DeskPurgeCurrentProcessElevated),
+        [long]$LargeFolderWarningThresholdBytes = 100GB
     )
 
     $plan = [ordered]@{
@@ -378,8 +379,11 @@ function New-DeskPurgeShortcutPlan {
         ShortcutName = Split-Path -Path $ShortcutPath -Leaf
         TargetPath = $TargetPath
         FolderToDelete = $null
+        FolderSizeBytes = $null
         FolderSizeDisplay = 'N/A'
         ProtectedBoundary = $null
+        LargeFolderWarning = $false
+        LargeFolderWarningMessage = $null
         Status = 'Ready'
         Message = 'Ready'
     }
@@ -402,8 +406,8 @@ function New-DeskPurgeShortcutPlan {
     }
 
     if (-not (Test-Path -LiteralPath $TargetPath)) {
-        $plan.Status = 'Target missing'
-        $plan.Message = 'Shortcut target no longer exists.'
+        $plan.Status = 'Ready'
+        $plan.Message = 'Shortcut target no longer exists. Only the shortcut will be deleted.'
         return [pscustomobject]$plan
     }
 
@@ -435,8 +439,19 @@ function New-DeskPurgeShortcutPlan {
         }
 
         $plan.FolderToDelete = $folderToDelete
-        $plan.FolderSizeDisplay = Get-DeskPurgeFolderSizeDisplay -Path $folderToDelete
+        $folderSizeBytes = Get-DeskPurgeFolderSizeBytes -Path $folderToDelete
+        $plan.FolderSizeBytes = $folderSizeBytes
+        $plan.FolderSizeDisplay = if ($null -ne $folderSizeBytes) {
+            Format-FileSize -Bytes $folderSizeBytes
+        }
+        else {
+            "Error calculating size"
+        }
         $plan.ProtectedBoundary = Split-Path -Path $folderToDelete -Parent
+        if ($null -ne $folderSizeBytes -and $folderSizeBytes -gt $LargeFolderWarningThresholdBytes) {
+            $plan.LargeFolderWarning = $true
+            $plan.LargeFolderWarningMessage = "This folder is over 100 GB. That can be normal for large games, but it can also mean DeskPurge found a parent/root folder. Review the folder and boundary before deleting."
+        }
 
         if ($plan.Status -eq 'Ready' -and (Test-DeskPurgeTargetProcessRunning -TargetPath $TargetPath)) {
             $plan.Status = 'Running'
@@ -520,12 +535,12 @@ function Format-FileSize {
     return "{0:N2} {1}" -f $num, $suffixes[$place]
 }
 
-function Get-DeskPurgeFolderSizeDisplay {
+function Get-DeskPurgeFolderSizeBytes {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     try {
         if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
-            return "N/A"
+            return $null
         }
 
         [long]$totalBytes = 0
@@ -533,9 +548,24 @@ function Get-DeskPurgeFolderSizeDisplay {
             $totalBytes += $item.Length
         }
 
-        return Format-FileSize -Bytes $totalBytes
+        return $totalBytes
     }
     catch {
+        return $null
+    }
+}
+
+function Get-DeskPurgeFolderSizeDisplay {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return "N/A"
+    }
+
+    $totalBytes = Get-DeskPurgeFolderSizeBytes -Path $Path
+    if ($null -eq $totalBytes) {
         return "Error calculating size"
     }
+
+    return Format-FileSize -Bytes $totalBytes
 }

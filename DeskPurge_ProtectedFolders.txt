@@ -1,4 +1,4 @@
-# DeskPurge Protected Folders Configuration
+﻿# DeskPurge Protected Folders Configuration
 # 
 # Add your game library root folders here (one path per line).
 # These act as "stop boundaries" when the script walks up parent folders.
@@ -12,7 +12,6 @@
 
 # Common game library locations - ADD YOUR ACTUAL PATHS:
 C:\Games
-D:\~Games~
 D:\Games
 E:\Games
 D:\Games2
@@ -32,7 +31,6 @@ D:\GOG Games
 
 # Origin/EA:
 C:\Program Files (x86)\Origin Games
-D:\Origin Games
 
 # Ubisoft/Uplay:
 C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games
@@ -47,3 +45,9 @@ C:\Dropbox
 C:\Google Drive
 
 
+
+# Added by DeskPurge review on 2026-06-16 15:42 after a large-folder warning.
+
+
+# Added by DeskPurge review after a large-folder warning on 2026-06-16 19:14.
+D:\Program Files

@@ -164,6 +164,27 @@ Describe 'New-DeskPurgeShortcutPlan' {
         $plan.Status | Should -Be 'Blocked'
         $plan.Message | Should -Match 'protected game-library folder'
     }
+
+    It 'keeps large folder warnings soft while leaving the row ready' {
+        $libraryPath = Join-Path -Path $TestDrive -ChildPath 'Library'
+        $gamePath = Join-Path -Path $libraryPath -ChildPath 'HugeGame'
+        New-Item -Path $gamePath -ItemType Directory | Out-Null
+        $targetPath = Join-Path -Path $gamePath -ChildPath 'game.exe'
+        Set-Content -LiteralPath $targetPath -Value '1234567890' -NoNewline
+
+        $plan = New-DeskPurgeShortcutPlan `
+            -ShortcutPath 'C:\Users\Example\Desktop\HugeGame.lnk' `
+            -TargetPath $targetPath `
+            -SystemProtectedPaths @() `
+            -UserProtectedFolders @($libraryPath) `
+            -IsElevated $true `
+            -LargeFolderWarningThresholdBytes 1
+
+        $plan.Status | Should -Be 'Ready'
+        $plan.LargeFolderWarning | Should -BeTrue
+        $plan.LargeFolderWarningMessage | Should -Match 'over 100 GB'
+        $plan.FolderSizeBytes | Should -BeGreaterThan 1
+    }
 }
 
 Describe 'Resolve-DeskPurgeDeletionTarget' {

@@ -60,6 +60,7 @@ DeskPurge's solution:
   This avoids the split-second PowerShell console flash that can happen when Explorer starts `powershell.exe` directly.
 - If you move the DeskPurge scripts later, re‑run `Install-ContextMenu.ps1` so the registry points to the new paths.
 - Public Desktop shortcuts may require admin rights. DeskPurge detects those rows and offers a restart-as-admin path instead of silently leaving the shortcut behind.
+- Use `Protected folders...` in the review window to manage protected folders in the DeskPurge GUI, add a folder with the picker, remove old entries, or open the raw config.
 - The old single-shortcut implementation is kept under `legacy/` for reference only; the root `DeskPurge.ps1` is the current adaptive single/batch version.
 
 ## Safety
@@ -68,6 +69,7 @@ DeskPurge's solution:
 - 📁 **Confirmed boundaries:** `DeskPurge_ProtectedFolders.txt` is required; DeskPurge can suggest likely game-library folders, but you must confirm them before deletion is allowed
 - ✅ **Confirmation dialog:** Shows the target folder and estimated size before deleting
 - ✅ **Multi-shortcut review:** Shows selected shortcuts in one table and only deletes checked ready rows
+- ⚠️ **Large-folder caution:** Folders over 100 GB stay deletable, but DeskPurge marks them with a warning and offers to protect that folder as a new stop boundary
 - 🚫 **Process check:** Ensures the game isn't running before deletion
 
 ## Important Disclaimers & Competitive Justification
