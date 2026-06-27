@@ -1920,6 +1920,9 @@ function Show-DeskPurgeBatchReview {
         $textColumn.HeaderText = $column.Text
         $textColumn.MinimumWidth = $column.MinimumWidth
         $textColumn.Resizable = [System.Windows.Forms.DataGridViewTriState]::False
+        if ($column.Name -eq 'Size') {
+            $textColumn.SortMode = [System.Windows.Forms.DataGridViewColumnSortMode]::Programmatic
+        }
         if ($column.ContainsKey('Width')) {
             $textColumn.Width = $column.Width
             $textColumn.AutoSizeMode = [System.Windows.Forms.DataGridViewAutoSizeColumnMode]::None
@@ -1931,6 +1934,8 @@ function Show-DeskPurgeBatchReview {
         $textColumn.ReadOnly = $true
         $grid.Columns.Add($textColumn) | Out-Null
     }
+
+    $script:DeskPurgeSizeSortDirection = 'None'
 
     $rowsByShortcutPath = @{}
 
@@ -2104,6 +2109,23 @@ function Show-DeskPurgeBatchReview {
             $summaryLabel.Text += ", $resolvingCount resolving"
         }
         $summaryLabel.Text += ", $($grid.Rows.Count) total"
+        if ($selectedCount -ge 2) {
+            [long]$totalSelectedBytes = 0
+            $allHaveSize = $true
+            foreach ($row in $grid.Rows) {
+                if ($row.Tag.Status -eq 'Ready' -and [bool]$row.Cells['Selected'].Value) {
+                    if ($null -ne $row.Tag.FolderSizeBytes) {
+                        $totalSelectedBytes += [long]$row.Tag.FolderSizeBytes
+                    }
+                    else {
+                        $allHaveSize = $false
+                    }
+                }
+            }
+            if ($allHaveSize -and $totalSelectedBytes -gt 0) {
+                $summaryLabel.Text += " (total size: $(Format-FileSize -Bytes $totalSelectedBytes))"
+            }
+        }
         if ($largeSelectedCount -gt 0) {
             $summaryLabel.Text += ", $largeSelectedCount over 100 GB"
         }
@@ -2141,6 +2163,66 @@ function Show-DeskPurgeBatchReview {
     })
     $grid.Add_CellValueChanged({ Update-DeskPurgeBatchSelectionSummary })
     $grid.Add_SelectionChanged({ Update-DeskPurgeBatchSelectionSummary })
+
+    $grid.Add_ColumnHeaderMouseClick({
+        param($sender, $eventArgs)
+        $clickedColumn = $grid.Columns[$eventArgs.ColumnIndex]
+        if ($clickedColumn.Name -ne 'Size') {
+            return
+        }
+
+        if ($script:DeskPurgeSizeSortDirection -eq 'Ascending') {
+            $script:DeskPurgeSizeSortDirection = 'Descending'
+        }
+        else {
+            $script:DeskPurgeSizeSortDirection = 'Ascending'
+        }
+
+        $sortedRows = @($grid.Rows | Sort-Object {
+            $sizeBytes = $_.Tag.FolderSizeBytes
+            if ($null -eq $sizeBytes) { [long]-1 } else { [long]$sizeBytes }
+        })
+
+        if ($script:DeskPurgeSizeSortDirection -eq 'Descending') {
+            [array]::Reverse($sortedRows)
+        }
+
+        $preservedPlans = @($sortedRows | ForEach-Object { $_.Tag })
+        $preservedChecks = @($sortedRows | ForEach-Object { [bool]$_.Cells['Selected'].Value })
+
+        $grid.Rows.Clear()
+        $rowsByShortcutPath.Clear()
+
+        for ($i = 0; $i -lt $preservedPlans.Count; $i++) {
+            $plan = $preservedPlans[$i]
+            $rowIndex = $grid.Rows.Add(
+                $preservedChecks[$i],
+                (Get-DeskPurgeStatusDisplay -Plan $plan),
+                $plan.FolderSizeDisplay,
+                $plan.ShortcutName,
+                $plan.FolderToDelete,
+                $plan.TargetPath,
+                $plan.ProtectedBoundary
+            )
+            $row = $grid.Rows[$rowIndex]
+            $row.Tag = $plan
+            Set-DeskPurgeBatchRowStatusStyle -Row $row
+
+            $shortcutKey = ConvertTo-DeskPurgeNormalizedPath -Path $plan.ShortcutPath
+            if ($shortcutKey) {
+                $rowsByShortcutPath[$shortcutKey] = $row
+            }
+        }
+
+        $sortGlyph = if ($script:DeskPurgeSizeSortDirection -eq 'Ascending') {
+            [System.Windows.Forms.SortOrder]::Ascending
+        }
+        else {
+            [System.Windows.Forms.SortOrder]::Descending
+        }
+        $clickedColumn.HeaderCell.SortGlyphDirection = $sortGlyph
+        Update-DeskPurgeBatchSelectionSummary
+    })
 
     $resolutionState = [pscustomobject]@{
         Job = $null
@@ -2308,24 +2390,47 @@ function Show-DeskPurgeBatchReview {
         $failedCount = @($deleteResults | Where-Object { $_.Status -eq 'Failed' }).Count
         $isSingleResult = $deleteResults.Count -eq 1
 
-        $badgeLabel = [System.Windows.Forms.Label]::new()
-        $badgeLabel.Location = [System.Drawing.Point]::new($contentX, 66)
-        $badgeLabel.Size = [System.Drawing.Size]::new(96, 26)
-        $badgeLabel.Text = 'DONE'
-        $badgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-        $badgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
-        $badgeLabel.BackColor = [System.Drawing.Color]::FromArgb(5, 46, 22)
-        $badgeLabel.ForeColor = $palette.Success
-        $rootPanel.Controls.Add($badgeLabel)
+        $doneBadgeLabel = [System.Windows.Forms.Label]::new()
+        $doneBadgeLabel.Location = [System.Drawing.Point]::new($contentX, 66)
+        $doneBadgeLabel.Size = [System.Drawing.Size]::new(96, 26)
+        $doneBadgeLabel.Text = 'DONE'
+        $doneBadgeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+        $doneBadgeLabel.Font = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+        $doneBadgeLabel.BackColor = [System.Drawing.Color]::FromArgb(5, 46, 22)
+        $doneBadgeLabel.ForeColor = $palette.Success
+        $rootPanel.Controls.Add($doneBadgeLabel)
+        $doneBadgeLabel.BringToFront()
 
+        $headingLabel.Location = [System.Drawing.Point]::new($contentX, 100)
         $headingLabel.Text = 'Uninstall complete'
         $headingLabel.Visible = $true
 
+        $totalFreedText = ''
+        if ($deleteResults.Count -ge 2) {
+            [long]$totalFreedBytes = 0
+            $allHaveSize = $true
+            foreach ($result in $deleteResults) {
+                if ($result.Status -eq 'Deleted' -or $result.Status -eq 'Shortcut failed') {
+                    $plan = $selectedArray | Where-Object { $_.ShortcutPath -eq $result.ShortcutPath } | Select-Object -First 1
+                    if ($null -ne $plan -and $null -ne $plan.FolderSizeBytes) {
+                        $totalFreedBytes += [long]$plan.FolderSizeBytes
+                    }
+                    else {
+                        $allHaveSize = $false
+                    }
+                }
+            }
+            if ($allHaveSize -and $totalFreedBytes -gt 0) {
+                $totalFreedText = " Total freed: $(Format-FileSize -Bytes $totalFreedBytes)."
+            }
+        }
+
+        $messageLabel.Location = [System.Drawing.Point]::new($contentX, 140)
         $messageLabel.Text = if ($isSingleResult) {
             "$($deleteResults[0].Status): $($deleteResults[0].Message) Log: $logFile"
         }
         else {
-            "$deletedCount deleted, $warningCount shortcut warning(s), $failedCount failed. Log: $logFile"
+            "$deletedCount deleted, $warningCount shortcut warning(s), $failedCount failed.$totalFreedText Log: $logFile"
         }
         $messageLabel.Visible = $true
 
@@ -2347,9 +2452,94 @@ function Show-DeskPurgeBatchReview {
             $textColumn.Name = $column.Name
             $textColumn.HeaderText = $column.Text
             $textColumn.Width = $column.Width
+            if ($column.Name -eq 'Freed') {
+                $textColumn.SortMode = [System.Windows.Forms.DataGridViewColumnSortMode]::Programmatic
+            }
             $textColumn.ReadOnly = $true
             $compGrid.Columns.Add($textColumn) | Out-Null
         }
+
+        $script:DeskPurgeFreedSortDirection = 'None'
+
+        $compGrid.Add_ColumnHeaderMouseClick({
+            param($sender, $eventArgs)
+            $clickedColumn = $compGrid.Columns[$eventArgs.ColumnIndex]
+            if ($clickedColumn.Name -ne 'Freed') {
+                return
+            }
+
+            if ($script:DeskPurgeFreedSortDirection -eq 'Ascending') {
+                $script:DeskPurgeFreedSortDirection = 'Descending'
+            }
+            else {
+                $script:DeskPurgeFreedSortDirection = 'Ascending'
+            }
+
+            $sortedRows = @($compGrid.Rows | Sort-Object {
+                $sizeText = [string]$_.Cells['Freed'].Value
+                $currentShortcutName = [string]$_.Cells['Shortcut'].Value
+                $matchedPlan = $selectedArray | Where-Object { $_.ShortcutName -eq $currentShortcutName } | Select-Object -First 1
+                if ($null -ne $matchedPlan -and $null -ne $matchedPlan.FolderSizeBytes) {
+                    return [long]$matchedPlan.FolderSizeBytes
+                }
+                # Parse the display string as fallback
+                if ($sizeText -match '^([\d.]+)\s+(B|KB|MB|GB|TB|PB|EB)$') {
+                    $num = [double]$matches[1]
+                    $unit = $matches[2]
+                    $multiplier = switch ($unit) {
+                        'B'  { 1 }
+                        'KB' { 1024 }
+                        'MB' { [math]::Pow(1024, 2) }
+                        'GB' { [math]::Pow(1024, 3) }
+                        'TB' { [math]::Pow(1024, 4) }
+                        'PB' { [math]::Pow(1024, 5) }
+                        'EB' { [math]::Pow(1024, 6) }
+                        default { 1 }
+                    }
+                    return [long]($num * $multiplier)
+                }
+                return [long]-1
+            })
+
+            if ($script:DeskPurgeFreedSortDirection -eq 'Descending') {
+                [array]::Reverse($sortedRows)
+            }
+
+            $preservedData = @($sortedRows | ForEach-Object {
+                [pscustomobject]@{
+                    Status = [string]$_.Cells['Status'].Value
+                    Shortcut = [string]$_.Cells['Shortcut'].Value
+                    Freed = [string]$_.Cells['Freed'].Value
+                    Message = [string]$_.Cells['Message'].Value
+                    Folder = [string]$_.Cells['Folder'].Value
+                    StatusColor = $_.Cells['Status'].Style.ForeColor
+                }
+            })
+
+            $compGrid.Rows.Clear()
+
+            foreach ($data in $preservedData) {
+                $newRowIndex = $compGrid.Rows.Add(
+                    $data.Status,
+                    $data.Shortcut,
+                    $data.Freed,
+                    $data.Message,
+                    $data.Folder
+                )
+                $newRow = $compGrid.Rows[$newRowIndex]
+                if ($data.StatusColor -ne [System.Drawing.Color]::Empty) {
+                    $newRow.Cells['Status'].Style.ForeColor = $data.StatusColor
+                }
+            }
+
+            $sortGlyph = if ($script:DeskPurgeFreedSortDirection -eq 'Ascending') {
+                [System.Windows.Forms.SortOrder]::Ascending
+            }
+            else {
+                [System.Windows.Forms.SortOrder]::Descending
+            }
+            $clickedColumn.HeaderCell.SortGlyphDirection = $sortGlyph
+        })
 
         foreach ($result in $deleteResults) {
             $rowIndex = $compGrid.Rows.Add(
